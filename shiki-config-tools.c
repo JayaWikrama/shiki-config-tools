@@ -69,7 +69,7 @@ int8_t sconf_setup(sconf_setup_parameter _parameters, uint16_t _value){
 }
 
 int8_t sconf_get_config(char* _file_name, char *_key, char *_return_value){
-    FILE *conf_file;
+    FILE *conf_file = NULL;
     uint8_t try_times = SCONF_OPEN_TRY_TIMES;
 
     do{
@@ -90,8 +90,8 @@ int8_t sconf_get_config(char* _file_name, char *_key, char *_return_value){
 	memset(buff_conf, 0x00, SCONF_MAX_BUFF*sizeof(char));
 	
 	while((character = fgetc(conf_file)) != EOF){
-		if (character > 127) break;
-		if (character == '\n' || idx_char == SCONF_MAX_BUFF){
+		if (character > 127 || character < 9) break;
+		if (character == '\n' || idx_char == (SCONF_MAX_BUFF-1)){
 			if(strcmp(buff_init, _key) == 0){
 				strcpy(_return_value, buff_conf);
                 fclose(conf_file);
@@ -125,7 +125,7 @@ int8_t sconf_get_config(char* _file_name, char *_key, char *_return_value){
 }
 
 int8_t sconf_update_config(char* _file_name, char* _key, char* _value, ...){
-    FILE *conf_file;
+    FILE *conf_file = NULL;
     uint8_t try_times = SCONF_OPEN_TRY_TIMES;
 
     // open existing file
@@ -141,12 +141,12 @@ int8_t sconf_update_config(char* _file_name, char* _key, char* _value, ...){
 
     char character = 0;
     char buff_init[SCONF_MAX_BUFF];
-    uint16_t idx_char;
+    uint16_t idx_char = 0;
     memset(buff_init, 0x00, SCONF_MAX_BUFF*sizeof(char));
 
     while((character = fgetc(conf_file)) != EOF){
-		if (character > 127) break;
-		if (character == '\n' || character == SCONF_SEPARATOR || idx_char == SCONF_MAX_BUFF){
+		if (character > 127 || character < 9) break;
+		if (character == '\n' || character == SCONF_SEPARATOR || idx_char == (SCONF_MAX_BUFF-1)){
 			if(strcmp(buff_init, _key) == 0){
                 break;
 			}
@@ -168,7 +168,7 @@ int8_t sconf_update_config(char* _file_name, char* _key, char* _value, ...){
     fseek(conf_file, 0, SEEK_SET);    
 
     // open new file
-    FILE *update_file;
+    FILE *update_file = NULL;
     try_times = SCONF_OPEN_TRY_TIMES;
 
     char tmp_file_name[strlen(_file_name) + 5];
@@ -190,7 +190,7 @@ int8_t sconf_update_config(char* _file_name, char* _key, char* _value, ...){
     char writen_value[SCONF_MAX_BUFF];
     memset (writen_value, 0x00, SCONF_MAX_BUFF*sizeof(char));
 	va_start(aptr, _value);
-	vsprintf(writen_value, _value, aptr);
+	vsnprintf(writen_value, (SCONF_MAX_BUFF - 1), _value, aptr);
 	va_end(aptr);
 
 	char buff_conf[SCONF_MAX_BUFF];
@@ -202,8 +202,8 @@ int8_t sconf_update_config(char* _file_name, char* _key, char* _value, ...){
 	memset(buff_conf, 0x00, SCONF_MAX_BUFF*sizeof(char));
 	
 	while((character = fgetc(conf_file)) != EOF){
-		if (character > 127) break;
-		if ((character == '\n'  || idx_char == SCONF_MAX_BUFF) && conf_cond == 0){
+		if (character > 127 || character < 9) break;
+		if ((character == '\n'  || idx_char == (SCONF_MAX_BUFF-1)) && conf_cond == 0){
 			if(strcmp(buff_init, _key) == 0){
                 fprintf(update_file, "%s%c%s\n", buff_init, SCONF_SEPARATOR, writen_value);
 			}
@@ -214,8 +214,14 @@ int8_t sconf_update_config(char* _file_name, char* _key, char* _value, ...){
 				memset(buff_conf, 0x00, SCONF_MAX_BUFF*sizeof(char));
                 idx_conf=idx_char=0;
 			}
-            else {
+            else if (strlen(buff_conf) > 0){
                 fprintf(update_file, "%s%c%s\n", buff_init, SCONF_SEPARATOR, buff_conf);
+            }
+            else if (strlen(buff_conf) == 0 && character != '\n'){
+                fprintf(update_file, "%s", buff_init);
+            }
+            else if (strlen(buff_conf) == 0 && character == '\n'){
+                fprintf(update_file, "%s\n", buff_init);
             }
 			memset(buff_init, 0x00, SCONF_MAX_BUFF*sizeof(char));
 			memset(buff_conf, 0x00, SCONF_MAX_BUFF*sizeof(char));
@@ -245,7 +251,7 @@ int8_t sconf_update_config(char* _file_name, char* _key, char* _value, ...){
 }
 
 int8_t sconf_update_keyword(char* _file_name, char* _old_key, char* _new_key){
-    FILE *conf_file;
+    FILE *conf_file = NULL;
     uint8_t try_times = SCONF_OPEN_TRY_TIMES;
 
     // open existing file
@@ -261,12 +267,12 @@ int8_t sconf_update_keyword(char* _file_name, char* _old_key, char* _new_key){
 
     char character = 0;
     char buff_init[SCONF_MAX_BUFF];
-    uint16_t idx_char;
+    uint16_t idx_char = 0;
     memset(buff_init, 0x00, SCONF_MAX_BUFF*sizeof(char));
 
     while((character = fgetc(conf_file)) != EOF){
-		if (character > 127) break;
-		if (character == '\n' || character == SCONF_SEPARATOR || idx_char == SCONF_MAX_BUFF){
+		if (character > 127 || character < 9) break;
+		if (character == '\n' || character == SCONF_SEPARATOR || idx_char == (SCONF_MAX_BUFF-1)){
 			if (strcmp(buff_init, _new_key) == 0){
                 fclose(conf_file);
                 sconf_debug(__func__, "ERROR", "keyword \"%s\" already exist. process aborted\n", buff_init);
@@ -293,7 +299,7 @@ int8_t sconf_update_keyword(char* _file_name, char* _old_key, char* _new_key){
     fseek(conf_file, 0, SEEK_SET);    
 
     // open new file
-    FILE *update_file;
+    FILE *update_file = NULL;
     try_times = SCONF_OPEN_TRY_TIMES;
 
     char tmp_file_name[strlen(_file_name) + 5];
@@ -320,8 +326,8 @@ int8_t sconf_update_keyword(char* _file_name, char* _old_key, char* _new_key){
 	memset(buff_conf, 0x00, SCONF_MAX_BUFF*sizeof(char));
 	
 	while((character = fgetc(conf_file)) != EOF){
-		if (character > 127) break;
-		if ((character == '\n' || idx_char == SCONF_MAX_BUFF) && conf_cond == 0){
+		if (character > 127 || character < 9) break;
+		if ((character == '\n' || idx_char == (SCONF_MAX_BUFF-1)) && conf_cond == 0){
 			if(strcmp(buff_init, _old_key) == 0){
                 fprintf(update_file, "%s%c%s\n", _new_key, SCONF_SEPARATOR, buff_conf);
 			}
@@ -332,8 +338,14 @@ int8_t sconf_update_keyword(char* _file_name, char* _old_key, char* _new_key){
 				memset(buff_conf, 0x00, SCONF_MAX_BUFF*sizeof(char));
                 idx_conf=idx_char=0;
 			}
-            else {
+            else if (strlen(buff_conf) > 0){
                 fprintf(update_file, "%s%c%s\n", buff_init, SCONF_SEPARATOR, buff_conf);
+            }
+            else if (strlen(buff_conf) == 0 && character != '\n'){
+                fprintf(update_file, "%s", buff_init);
+            }
+            else if (strlen(buff_conf) == 0 && character == '\n'){
+                fprintf(update_file, "%s\n", buff_init);
             }
 			memset(buff_init, 0x00, SCONF_MAX_BUFF*sizeof(char));
 			memset(buff_conf, 0x00, SCONF_MAX_BUFF*sizeof(char));
@@ -363,7 +375,7 @@ int8_t sconf_update_keyword(char* _file_name, char* _old_key, char* _new_key){
 }
 
 int8_t sconf_remove_config(char* _file_name, char* _key){
-    FILE *conf_file;
+    FILE *conf_file = NULL;
     uint8_t try_times = SCONF_OPEN_TRY_TIMES;
 
     // open existing file
@@ -379,12 +391,12 @@ int8_t sconf_remove_config(char* _file_name, char* _key){
 
     char character = 0;
     char buff_init[SCONF_MAX_BUFF];
-    uint16_t idx_char;
+    uint16_t idx_char = 0;
     memset(buff_init, 0x00, SCONF_MAX_BUFF*sizeof(char));
 
     while((character = fgetc(conf_file)) != EOF){
-		if (character > 127) break;
-		if (character == '\n' || character == SCONF_SEPARATOR || idx_char == SCONF_MAX_BUFF){
+		if (character > 127 || character < 9) break;
+		if (character == '\n' || character == SCONF_SEPARATOR || idx_char == (SCONF_MAX_BUFF-1)){
 			if(strcmp(buff_init, _key) == 0){
                 break;
 			}
@@ -406,7 +418,7 @@ int8_t sconf_remove_config(char* _file_name, char* _key){
     fseek(conf_file, 0, SEEK_SET);    
 
     // open new file
-    FILE *update_file;
+    FILE *update_file = NULL;
     try_times = SCONF_OPEN_TRY_TIMES;
 
     char tmp_file_name[strlen(_file_name) + 5];
@@ -433,8 +445,8 @@ int8_t sconf_remove_config(char* _file_name, char* _key){
 	memset(buff_conf, 0x00, SCONF_MAX_BUFF*sizeof(char));
 	
 	while((character = fgetc(conf_file)) != EOF){
-		if (character > 127) break;
-		if ((character == '\n' || idx_char == SCONF_MAX_BUFF) && conf_cond == 0){
+		if (character > 127 || character < 9) break;
+		if ((character == '\n' || idx_char == (SCONF_MAX_BUFF-1)) && conf_cond == 0){
 			if(strcmp(buff_init, _key) == 0){
                 // do noting
 			}
@@ -445,8 +457,14 @@ int8_t sconf_remove_config(char* _file_name, char* _key){
 				memset(buff_conf, 0x00, SCONF_MAX_BUFF*sizeof(char));
                 idx_conf=idx_char=0;
 			}
-            else {
+            else if (strlen(buff_conf) > 0) {
                 fprintf(update_file, "%s%c%s\n", buff_init, SCONF_SEPARATOR, buff_conf);
+            }
+            else if (strlen(buff_conf) == 0 && character != '\n'){
+                fprintf(update_file, "%s", buff_init);
+            }
+            else if (strlen(buff_conf) == 0 && character == '\n'){
+                fprintf(update_file, "%s\n", buff_init);
             }
 			memset(buff_init, 0x00, SCONF_MAX_BUFF*sizeof(char));
 			memset(buff_conf, 0x00, SCONF_MAX_BUFF*sizeof(char));
@@ -476,7 +494,7 @@ int8_t sconf_remove_config(char* _file_name, char* _key){
 }
 
 int8_t sconf_remove_broken_config(char* _file_name){
-    FILE *conf_file;
+    FILE *conf_file = NULL;
     uint8_t try_times = SCONF_OPEN_TRY_TIMES;
 
     // open existing file
@@ -491,7 +509,7 @@ int8_t sconf_remove_broken_config(char* _file_name){
     }
 
     // open new file
-    FILE *update_file;
+    FILE *update_file = NULL;
     try_times = SCONF_OPEN_TRY_TIMES;
 
     char tmp_file_name[strlen(_file_name) + 5];
@@ -518,8 +536,8 @@ int8_t sconf_remove_broken_config(char* _file_name){
 	memset(buff_conf, 0x00, SCONF_MAX_BUFF*sizeof(char));
 
 	while((character = fgetc(conf_file)) != EOF){
-		if (character > 127) break;
-		if ((character == '\n' || idx_char == SCONF_MAX_BUFF) && conf_cond == 0){
+		if (character > 127 || character < 9) break;
+		if ((character == '\n' || idx_char == (SCONF_MAX_BUFF-1)) && conf_cond == 0){
 			if(strlen(buff_init) > 0 && strlen(buff_conf) == 0 && idx_conf == 1){
                 // do noting
 			}
@@ -561,7 +579,7 @@ int8_t sconf_remove_broken_config(char* _file_name){
 }
 
 int8_t sconf_start_create_new_config(char *_file_name, char *_key, char *_value, ...){
-    FILE *conf_file;
+    FILE *conf_file = NULL;
     uint8_t try_times = SCONF_OPEN_TRY_TIMES;
     // check existing file
     do{
@@ -591,7 +609,7 @@ int8_t sconf_start_create_new_config(char *_file_name, char *_key, char *_value,
     char writen_value[SCONF_MAX_BUFF];
     memset (writen_value, 0x00, SCONF_MAX_BUFF*sizeof(char));
 	va_start(aptr, _value);
-	vsprintf(writen_value, _value, aptr);
+	vsnprintf(writen_value, (SCONF_MAX_BUFF - 1), _value, aptr);
 	va_end(aptr);
 
     fprintf(conf_file, "%s%c%s\n", _key, SCONF_SEPARATOR, writen_value);
@@ -601,7 +619,7 @@ int8_t sconf_start_create_new_config(char *_file_name, char *_key, char *_value,
 }
 
 int8_t sconf_append_new_config(char *_file_name, char *_key, char *_value, ...){
-    FILE *conf_file;
+    FILE *conf_file = NULL;
     uint8_t try_times = SCONF_OPEN_TRY_TIMES;
     // check existing file
     do{
@@ -616,12 +634,12 @@ int8_t sconf_append_new_config(char *_file_name, char *_key, char *_value, ...){
 
     char character = 0;
     char buff_check[SCONF_MAX_BUFF];
-    uint16_t idx_char;
+    uint16_t idx_char = 0;
     memset(buff_check, 0x00, SCONF_MAX_BUFF*sizeof(char));
 
     while((character = fgetc(conf_file)) != EOF){
-		if (character > 127) break;
-		if (character == '\n' || character == SCONF_SEPARATOR || idx_char == SCONF_MAX_BUFF){
+        if (character > 127 || character < 9) break;
+		if (character == '\n' || character == SCONF_SEPARATOR || idx_char == (SCONF_MAX_BUFF-1)){
 			if(strcmp(buff_check, "[END]") == 0){
                 fclose(conf_file);
                 sconf_debug(__func__, "WARNING", "this file is finished config. process aborted\n");
@@ -642,7 +660,7 @@ int8_t sconf_append_new_config(char *_file_name, char *_key, char *_value, ...){
 	}
 
     fclose(conf_file);
-
+    
     // append data to config
     try_times = SCONF_OPEN_TRY_TIMES;
     do{
@@ -658,9 +676,11 @@ int8_t sconf_append_new_config(char *_file_name, char *_key, char *_value, ...){
     va_list aptr;
     char writen_value[SCONF_MAX_BUFF];
     memset (writen_value, 0x00, SCONF_MAX_BUFF*sizeof(char));
-	va_start(aptr, _value);
-	vsprintf(writen_value, _value, aptr);
-	va_end(aptr);
+    if (_value != NULL){
+    	va_start(aptr, _value);
+        vsnprintf(writen_value, (SCONF_MAX_BUFF - 1), _value, aptr);
+        va_end(aptr);
+    }
 
     if (strlen(writen_value) == 0){
         fprintf(conf_file, "%s\n", _key);
@@ -678,7 +698,7 @@ int8_t sconf_end_new_config_file(char *_file_name){
 }
 
 int8_t sconf_insert_config(char *_file_name, char *_key, char *_value, ...){
-    FILE *conf_file;
+    FILE *conf_file = NULL;
     uint8_t try_times = SCONF_OPEN_TRY_TIMES;
 
     // open existing file
@@ -695,11 +715,11 @@ int8_t sconf_insert_config(char *_file_name, char *_key, char *_value, ...){
     // check if key exist
     char character = 0;
     char buff_init[SCONF_MAX_BUFF];
-    uint16_t idx_char;
+    uint16_t idx_char = 0;
 
     while((character = fgetc(conf_file)) != EOF){
-		if (character > 127) break;
-		if (character == '\n' || character == SCONF_SEPARATOR || idx_char == SCONF_MAX_BUFF){
+		if (character > 127 || character < 9) break;
+		if (character == '\n' || character == SCONF_SEPARATOR || idx_char == (SCONF_MAX_BUFF-1)){
 			if(strcmp(buff_init, _key) == 0){
                 fclose(conf_file);
                 sconf_debug(__func__, "WARNING", "key config \"%s\" already exist. process aborted\n", _key);
@@ -726,7 +746,7 @@ int8_t sconf_insert_config(char *_file_name, char *_key, char *_value, ...){
     fseek(conf_file, 0, SEEK_SET);
 
     // open new file
-    FILE *update_file;
+    FILE *update_file = NULL;
     try_times = SCONF_OPEN_TRY_TIMES;
 
     char tmp_file_name[strlen(_file_name) + 5];
@@ -748,7 +768,7 @@ int8_t sconf_insert_config(char *_file_name, char *_key, char *_value, ...){
     char writen_value[SCONF_MAX_BUFF];
     memset (writen_value, 0x00, SCONF_MAX_BUFF*sizeof(char));
 	va_start(aptr, _value);
-	vsprintf(writen_value, _value, aptr);
+	vsnprintf(writen_value, (SCONF_MAX_BUFF - 1), _value, aptr);
 	va_end(aptr);
 
 	char buff_conf[SCONF_MAX_BUFF];
@@ -760,8 +780,8 @@ int8_t sconf_insert_config(char *_file_name, char *_key, char *_value, ...){
 	memset(buff_conf, 0x00, SCONF_MAX_BUFF*sizeof(char));
 	
 	while((character = fgetc(conf_file)) != EOF){
-		if (character > 127) break;
-		if ((character == '\n' || idx_char == SCONF_MAX_BUFF) && conf_cond == 0){
+		if (character > 127 || character < 9) break;
+		if ((character == '\n' || idx_char == (SCONF_MAX_BUFF-1)) && conf_cond == 0){
 			if(strncmp(buff_init, "[END]", strlen("[END]")) == 0){
                 fprintf(update_file, "%s%c%s\n", _key, SCONF_SEPARATOR, writen_value);
                 fprintf(update_file, "[END]\n");
@@ -801,7 +821,7 @@ int8_t sconf_insert_config(char *_file_name, char *_key, char *_value, ...){
 }
 
 int8_t sconf_set_additional_information(char *_file_name, char *_aditional_data){
-    FILE *conf_file;
+    FILE *conf_file = NULL;
     uint8_t try_times = SCONF_OPEN_TRY_TIMES;
     // check existing file
     do{
@@ -817,12 +837,12 @@ int8_t sconf_set_additional_information(char *_file_name, char *_aditional_data)
     // check if config file is complete
     char character = 0;
     char buff_init[SCONF_MAX_BUFF];
-    uint16_t idx_char;
+    uint16_t idx_char = 0;
     memset(buff_init, 0x00, SCONF_MAX_BUFF*sizeof(char));
 
     while((character = fgetc(conf_file)) != EOF){
-		if (character > 127) break;
-		if (character == '\n' || character == SCONF_SEPARATOR || idx_char == SCONF_MAX_BUFF){
+		if (character > 127 || character < 9) break;
+		if (character == '\n' || character == SCONF_SEPARATOR || idx_char == (SCONF_MAX_BUFF-1)){
 			if(strcmp(buff_init, "[END]") == 0){
                 break;
 			}
@@ -844,7 +864,7 @@ int8_t sconf_set_additional_information(char *_file_name, char *_aditional_data)
     fseek(conf_file, 0, SEEK_SET);
 
     // open new file
-    FILE *update_file;
+    FILE *update_file = NULL;
     try_times = SCONF_OPEN_TRY_TIMES;
 
     char tmp_file_name[strlen(_file_name) + 5];
@@ -870,8 +890,8 @@ int8_t sconf_set_additional_information(char *_file_name, char *_aditional_data)
 	memset(buff_conf, 0x00, SCONF_MAX_BUFF*sizeof(char));
 	
 	while((character = fgetc(conf_file)) != EOF){
-		if (character > 127) break;
-		if (character == '\n' || idx_char == SCONF_MAX_BUFF){
+		if (character > 127 || character < 9) break;
+		if (character == '\n' || idx_char == (SCONF_MAX_BUFF-1)){
 			if(strncmp(buff_init, "[END]", strlen("[END]")) == 0){
                 fprintf(update_file, "[END]\n");
                 fprintf(update_file, "%s", _aditional_data);
@@ -908,7 +928,7 @@ int8_t sconf_set_additional_information(char *_file_name, char *_aditional_data)
 }
 
 int8_t sconf_append_additional_information(char *_file_name, char *_aditional_data){
-    FILE *conf_file;
+    FILE *conf_file = NULL;
     uint8_t try_times = SCONF_OPEN_TRY_TIMES;
     // check existing file
     do{
@@ -924,12 +944,12 @@ int8_t sconf_append_additional_information(char *_file_name, char *_aditional_da
     // check if config file is complete
     char character = 0;
     char buff_init[SCONF_MAX_BUFF];
-    uint16_t idx_char;
+    uint16_t idx_char = 0;
     memset(buff_init, 0x00, SCONF_MAX_BUFF*sizeof(char));
 
     while((character = fgetc(conf_file)) != EOF){
-		if (character > 127) break;
-		if (character == '\n' || character == SCONF_SEPARATOR || idx_char == SCONF_MAX_BUFF){
+		if (character > 127 || character < 9) break;
+		if (character == '\n' || character == SCONF_SEPARATOR || idx_char == (SCONF_MAX_BUFF-1)){
 			if(strcmp(buff_init, "[END]") == 0){
                 break;
 			}
@@ -968,7 +988,7 @@ int8_t sconf_append_additional_information(char *_file_name, char *_aditional_da
 }
 
 int8_t sconf_get_additional_information(char *_file_name, char *_aditional_data, uint16_t _max_data_to_get){
-    FILE *conf_file;
+    FILE *conf_file = NULL;
     uint8_t try_times = SCONF_OPEN_TRY_TIMES;
 
     do{
@@ -992,7 +1012,7 @@ int8_t sconf_get_additional_information(char *_file_name, char *_aditional_data,
 	
 	while((character = fgetc(conf_file)) != EOF){
 		if (character > 127 || additional_idx_chr == _max_data_to_get) break;
-		if ((character == '\n' || character == SCONF_SEPARATOR || idx_char == SCONF_MAX_BUFF) && conf_cond == 0){
+		if ((character == '\n' || character == SCONF_SEPARATOR || idx_char == (SCONF_MAX_BUFF-1)) && conf_cond == 0){
 			if(strcmp(buff_check, "[END]") == 0){
 				conf_cond = 1;
 			}
@@ -1035,7 +1055,7 @@ int8_t sconf_enable_config(char *_file_name, char *_key){
 // ADDITIONAL FUNCTION LINE_CONFIG
 
 int8_t sconf_check_config_by_line(char *_file_name, char *_line_value){
-    FILE *conf_file;
+    FILE *conf_file = NULL;
     uint8_t try_times = SCONF_OPEN_TRY_TIMES;
 
     do{
@@ -1055,7 +1075,7 @@ int8_t sconf_check_config_by_line(char *_file_name, char *_line_value){
 	memset(buff, 0x00, SCONF_MAX_LINE_LENGTH*sizeof(char));
 	
 	while((character = fgetc(conf_file)) != EOF){
-		if (character > 127) break;
+		if (character > 127 || character < 9) break;
 		if (character == '\n' || idx_char == SCONF_MAX_LINE_LENGTH){
 			if(strcmp(buff, _line_value) == 0){
 				idx_conf++;
@@ -1100,7 +1120,7 @@ int8_t sconf_disable_config_by_line(char *_file_name, char *_line_value){
     }
     SCONF_SKIP_SPACE_FROM_LINE = setup_tmp;
     
-    FILE *conf_file;
+    FILE *conf_file = NULL;
     uint8_t try_times = SCONF_OPEN_TRY_TIMES;
 
     do{
@@ -1117,7 +1137,7 @@ int8_t sconf_disable_config_by_line(char *_file_name, char *_line_value){
     char tmp_file_name[strlen(_file_name) + 5];
     memset(tmp_file_name, 0x00, (strlen(_file_name) + 5) *sizeof(char));
     sprintf(tmp_file_name, "%s.tmp", _file_name);
-    FILE *update_file;
+    FILE *update_file = NULL;
     try_times = SCONF_OPEN_TRY_TIMES;
 
     do{
@@ -1137,7 +1157,7 @@ int8_t sconf_disable_config_by_line(char *_file_name, char *_line_value){
 	memset(buff, 0x00, SCONF_MAX_LINE_LENGTH*sizeof(char));
 	
 	while((character = fgetc(conf_file)) != EOF){
-		if (character > 127) break;
+		if (character > 127 || character < 9) break;
 		if (character == '\n' || idx_char == SCONF_MAX_LINE_LENGTH){
 			if(strcmp(buff, _line_value) == 0){
                 fprintf(update_file, "%c", SCONF_DISABLE_FLAG);
@@ -1194,7 +1214,7 @@ int8_t sconf_enable_config_by_line(char *_file_name, char *_line_value){
     }
     SCONF_SKIP_SPACE_FROM_LINE = setup_tmp;
     
-    FILE *conf_file;
+    FILE *conf_file = NULL;
     uint8_t try_times = SCONF_OPEN_TRY_TIMES;
 
     do{
@@ -1211,7 +1231,7 @@ int8_t sconf_enable_config_by_line(char *_file_name, char *_line_value){
     char tmp_file_name[strlen(_file_name) + 5];
     memset(tmp_file_name, 0x00, (strlen(_file_name) + 5) *sizeof(char));
     sprintf(tmp_file_name, "%s.tmp", _file_name);
-    FILE *update_file;
+    FILE *update_file = NULL;
     try_times = SCONF_OPEN_TRY_TIMES;
 
     do{
@@ -1231,7 +1251,7 @@ int8_t sconf_enable_config_by_line(char *_file_name, char *_line_value){
 	memset(buff, 0x00, SCONF_MAX_LINE_LENGTH*sizeof(char));
 	
 	while((character = fgetc(conf_file)) != EOF){
-		if (character > 127) break;
+		if (character > 127 || character < 9) break;
 		if (character == '\n' || idx_char == SCONF_MAX_LINE_LENGTH){
 			if(strcmp(buff, line_value_tmp) == 0){
                 fprintf(update_file, "%s\n", _line_value);
@@ -1297,7 +1317,7 @@ int8_t sconf_append_line_config(char *_file_name, char *_line_value){
 
     SCONF_SKIP_SPACE_FROM_LINE = setup_tmp;
     
-    FILE *conf_file;
+    FILE *conf_file = NULL;
     uint8_t try_times = SCONF_OPEN_TRY_TIMES;
 
     do{
