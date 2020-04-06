@@ -13,6 +13,7 @@
 #include <stdarg.h>
 #include <unistd.h>
 #include <time.h>
+#include <sys/time.h>
 
 #include "../shiki-linked-list/shiki-linked-list.h"
 #include "shiki-config-tools.h"
@@ -37,23 +38,134 @@ SHLink sconf_list;
 static void sconf_debug(const char *function_name, char *debug_type, char *debug_msg, ...);
 static int8_t sconf_update_config(char* _file_name, sconf_rules _rules, char* _old_key, char* _new_key, char* _old_value, char* _new_value);
 static int8_t sconf_remove_config(char* _file_name, char* _key, char* _value);
-static int8_t sconf_write_config(char *_file_name, char *_file_alias, sconf_purpose_parameter _param);
+static int8_t sconf_write_config(char *_file_name, char *_file_alias, char *_valid_checksum, sconf_purpose_parameter _param);
 
 static void sconf_debug(const char *function_name, char *debug_type, char *debug_msg, ...){
-	if (sconf_debug_mode_status == 1){
-        time_t debug_time;
-	    struct tm *d_tm;
+	if (sconf_debug_mode_status == 1 || strcmp(debug_type, "INFO") != 0){
+        struct tm *d_tm;
+        struct timeval tm_debug;
+        uint16_t msec = 0;
 	    va_list aptr;
 		
-	    time(&debug_time);
-	    d_tm = localtime(&debug_time);
-	    char tmp_debug_msg[100];
+	    gettimeofday(&tm_debug, NULL);
+	    d_tm = localtime(&tm_debug.tv_sec);
+        msec = tm_debug.tv_usec/1000;
+	
+	    char* tmp_debug_msg;
+        tmp_debug_msg = (char *) malloc(256*sizeof(char));
+        if (tmp_debug_msg == NULL){
+            printf("%02d-%02d-%04d %02d:%02d:%02d.%03i ERROR: %s: failed to allocate debug variable memory",
+             d_tm->tm_mday, d_tm->tm_mon+1, d_tm->tm_year+1900, d_tm->tm_hour, d_tm->tm_min, d_tm->tm_sec, msec, __func__
+            );
+            return;
+        }
 	    va_start(aptr, debug_msg);
 	    vsprintf(tmp_debug_msg, debug_msg, aptr);
 	    va_end(aptr);
-	
-	    printf("%02d-%02d-%04d %02d:%02d:%02d %s: %s: %s", d_tm->tm_mday, d_tm->tm_mon+1, d_tm->tm_year+1900, d_tm->tm_hour, d_tm->tm_min, d_tm->tm_sec, debug_type, function_name, tmp_debug_msg);
+        #ifdef __linux__
+            if (strcmp(debug_type, "INFO")==0)
+                printf("\033[1;32m%02d-%02d-%04d %02d:%02d:%02d.%03d\033[1;34m SCONF\033[1;32m %s: %s: %s\033[0m",
+                 d_tm->tm_mday, d_tm->tm_mon+1, d_tm->tm_year+1900, d_tm->tm_hour, d_tm->tm_min, d_tm->tm_sec,
+                 msec, debug_type, function_name, tmp_debug_msg
+                );
+    	    else if (strcmp(debug_type, "WARNING")==0)
+                printf("\033[1;33m%02d-%02d-%04d %02d:%02d:%02d.%03d\033[1;34m SCONF\033[1;33m %s: %s: %s\033[0m",
+                 d_tm->tm_mday, d_tm->tm_mon+1, d_tm->tm_year+1900, d_tm->tm_hour, d_tm->tm_min, d_tm->tm_sec,
+                 msec, debug_type, function_name, tmp_debug_msg
+                );
+    	    else if (strcmp(debug_type, "ERROR")==0)
+                printf("\033[1;31m%02d-%02d-%04d %02d:%02d:%02d.%03d\033[1;34m SCONF\033[1;31m %s: %s: %s\033[0m",
+                 d_tm->tm_mday, d_tm->tm_mon+1, d_tm->tm_year+1900, d_tm->tm_hour, d_tm->tm_min, d_tm->tm_sec,
+                 msec, debug_type, function_name, tmp_debug_msg
+                );
+            else if (strcmp(debug_type, "CRITICAL")==0)
+                printf("\033[1;31m%02d-%02d-%04d %02d:%02d:%02d.%03d\033[1;34m SCONF\033[1;31m %s: %s: %s\033[0m",
+                 d_tm->tm_mday, d_tm->tm_mon+1, d_tm->tm_year+1900, d_tm->tm_hour, d_tm->tm_min, d_tm->tm_sec,
+                 msec, debug_type, function_name, tmp_debug_msg
+                );
+	    #else
+            printf("%02d-%02d-%04d %02d:%02d:%02d.%03d SCONF %s: %s: %s",
+             d_tm->tm_mday, d_tm->tm_mon+1, d_tm->tm_year+1900, d_tm->tm_hour, d_tm->tm_min, d_tm->tm_sec,
+             msec, debug_type, function_name, tmp_debug_msg
+            );
+        #endif
+        free(tmp_debug_msg);
+        tmp_debug_msg = NULL;
     }
+}
+
+static void sconf_append_data_checksum(unsigned char *_checksum_data, unsigned char *_data, uint16_t _sizeof_data){
+    unsigned long cs = 0;
+    unsigned long max_cs = 0;
+    memcpy(&cs, _checksum_data, sizeof(cs));
+    memset(&max_cs, 0xFF, sizeof(max_cs));
+
+    uint16_t idx_char = 0;
+
+    if (cs == 0){
+        cs = 1;
+    }
+
+    for (idx_char=0; idx_char<_sizeof_data; idx_char++){
+        while ((cs * _data[idx_char]) >= max_cs/512){
+            cs = cs / 2;
+        }
+        cs = cs * _data[idx_char];
+    }
+
+    memcpy(_checksum_data, &cs, sizeof(cs));
+}
+
+static void sconf_output_checksum_string(char *_checksum_str, unsigned char *_checksum_data){
+    uint8_t idx_data = 0;
+    char checksum[(2*sizeof(long))+1];
+    char bytes[3];
+    memset(checksum, 0x00, sizeof(checksum));
+
+    for (idx_data=0; idx_data<sizeof(long); idx_data++){
+        memset(bytes, 0x00, sizeof(bytes));
+        sprintf(bytes, "%02X", _checksum_data[idx_data]);
+        strcat(checksum, bytes);        
+    }
+
+    strcpy(_checksum_str, checksum);
+}
+
+int8_t sconf_get_checksum_file(char *_file_name, char *_checksum){
+    FILE *conf_file = NULL;
+    uint8_t try_times = SCONF_OPEN_TRY_TIMES;
+    unsigned char checksum_data[sizeof(long)];
+    char checksum_str[(2*sizeof(long))+1];
+    memset(checksum_data, 0x00, sizeof(checksum_data));
+    memset(checksum_str, 0x00, sizeof(checksum_str));
+
+    do{
+    	conf_file = fopen(_file_name, "r");
+        try_times--;
+    } while (conf_file == NULL && try_times > 0);
+
+    if (conf_file == NULL){
+        sconf_debug(__func__, "ERROR", "failed to open config file\n");
+        return -1;
+    }
+
+	char character = 0;
+    char data[2];
+	uint16_t idx_char = 0;
+	
+	while((character = fgetc(conf_file)) != EOF){
+		if (character > 127 || character < 9) break;
+        data[0] = character;
+        data[1] = 0x00;
+        sconf_append_data_checksum(checksum_data, (unsigned char*) data, 1);
+	}
+    
+    fclose(conf_file);
+
+    sconf_output_checksum_string(checksum_str, checksum_data);
+
+    strcpy(_checksum, checksum_str);
+    return 0;
 }
 
 int8_t sconf_setup(sconf_setup_parameter _parameters, uint16_t _value){
@@ -592,7 +704,7 @@ int8_t sconf_insert_config(char *_file_name, sconf_rules _rules, char *_key, cha
         char value[SCONF_MAX_BUFF];
         if (sconf_get_config_n(_file_name, _key, 0, value) == 0){
           sconf_debug(__func__, "WARNING", "key %s in %s already exist. process aborted\n",
-         _key, _file_name
+          _key, _file_name
          );
          return -8;
         }
@@ -602,7 +714,7 @@ int8_t sconf_insert_config(char *_file_name, sconf_rules _rules, char *_key, cha
         strcat(key_tmp, _key);
         if (sconf_get_config_n(_file_name, key_tmp, 0, value) == 0){
           sconf_debug(__func__, "WARNING", "key %s in %s already exist, but disabled. process aborted\n",
-         _key, _file_name
+          _key, _file_name
          );
          return -9;
         }
@@ -643,18 +755,18 @@ int8_t sconf_insert_config(char *_file_name, sconf_rules _rules, char *_key, cha
 
     if (strcmp(_key, "add_info") != 0){
         if (shilink_insert_before(&sconf_list, cond_data, conf_data) != 0){
-            sconf_debug(__func__, "ERROR", "failed to insert new config (3)\n");
-            shilink_free_custom_data(&cond_data);
-            return -5;
-        }
-    }
-    else {
-        if (shilink_insert_after(&sconf_list, cond_data, conf_data) != 0){
             if (shilink_append(&sconf_list, conf_data) != 0){
                 sconf_debug(__func__, "ERROR", "failed to insert new config (3)\n");
                 shilink_free_custom_data(&cond_data);
                 return -5;
             }
+        }
+    }
+    else {
+        if (shilink_insert_after(&sconf_list, cond_data, conf_data) != 0){
+            sconf_debug(__func__, "ERROR", "failed to insert new config (3)\n");
+            shilink_free_custom_data(&cond_data);
+            return -5;
         }
     }
 
@@ -669,7 +781,7 @@ int8_t sconf_insert_config(char *_file_name, sconf_rules _rules, char *_key, cha
     return 0;
 }
 
-static int8_t sconf_write_config(char *_file_name, char *_file_alias, sconf_purpose_parameter _param){
+static int8_t sconf_write_config(char *_file_name, char *_file_alias, char *_valid_checksum, sconf_purpose_parameter _param){
     if (init_state == 0){
         sconf_init();
     }
@@ -731,6 +843,14 @@ static int8_t sconf_write_config(char *_file_name, char *_file_alias, sconf_purp
     int8_t retval = 0;
     int8_t end_state = 0;
     uint16_t idx_pos = 1;
+    char sconf_bytes[2];
+    unsigned char checksum_data[sizeof(long)];
+    char checksum_str[2*(sizeof(long))+1];
+    memset(checksum_data, 0x00, sizeof(checksum_data));
+    memset(checksum_str, 0x00, sizeof(checksum_str));
+
+    sconf_bytes[0] = SCONF_SEPARATOR;
+    sconf_bytes[1] = 0x00;
 
     do {
         retval = shilink_get_data_by_position(sconf_list, idx_pos, &data_conf);
@@ -738,21 +858,31 @@ static int8_t sconf_write_config(char *_file_name, char *_file_alias, sconf_purp
             if (end_state == 0){
                 if (strcmp(data_conf.sl_key, "add_info") == 0){
                     fprintf(conf_file, "[END]\n%s", data_conf.sl_value);
+                    sconf_append_data_checksum(checksum_data, (unsigned char *) "[END]\n", 6);
+                    sconf_append_data_checksum(checksum_data, (unsigned char *) data_conf.sl_value, strlen(data_conf.sl_value));
                     break;
                 }
                 else if (strcmp(data_conf.sl_key, "[END]") == 0){
                     fprintf(conf_file, "%s\n", data_conf.sl_key);
+                    sconf_append_data_checksum(checksum_data, (unsigned char *) "[END]\n", 6);
                     end_state = 1;
                 }
                 else if (strlen(data_conf.sl_value) == 0){
                     fprintf(conf_file, "%s\n", data_conf.sl_key);
+                    sconf_append_data_checksum(checksum_data, (unsigned char *) data_conf.sl_key, strlen(data_conf.sl_key));
+                    sconf_append_data_checksum(checksum_data, (unsigned char *) "\n", 1);
                 }
                 else if (strlen(data_conf.sl_value) > 0){
                     fprintf(conf_file, "%s%c%s\n", data_conf.sl_key, SCONF_SEPARATOR, data_conf.sl_value);
+                    sconf_append_data_checksum(checksum_data, (unsigned char *) data_conf.sl_key, strlen(data_conf.sl_key));
+                    sconf_append_data_checksum(checksum_data, (unsigned char *) sconf_bytes, 1);
+                    sconf_append_data_checksum(checksum_data, (unsigned char *) data_conf.sl_value, strlen(data_conf.sl_value));
+                    sconf_append_data_checksum(checksum_data, (unsigned char *) "\n", 1);
                 }
             }
             else if (strcmp(data_conf.sl_key, "add_info") == 0){
                 fprintf(conf_file, "%s", data_conf.sl_value);
+                sconf_append_data_checksum(checksum_data, (unsigned char *) data_conf.sl_value, strlen(data_conf.sl_value));
                 break;
             }
         }
@@ -760,27 +890,61 @@ static int8_t sconf_write_config(char *_file_name, char *_file_alias, sconf_purp
     } while (retval == 0);
 
     fclose(conf_file);
+    sconf_output_checksum_string(checksum_str, checksum_data);
+    strcpy(_valid_checksum, checksum_str);
     return 0;
 }
 
 int8_t sconf_generate_new_config_end(char *_file_name){
-    if (sconf_write_config(_file_name, _file_name, SCONF_CREATE_PURPOSE) != 0){
+    char sconf_checksum[(2*sizeof(long))+1];
+    char valid_checksum[(2*sizeof(long))+1];
+
+    memset(sconf_checksum, 0x00, sizeof(sconf_checksum));
+    memset(valid_checksum, 0x00, sizeof(valid_checksum));
+
+    if (sconf_write_config(_file_name, _file_name, valid_checksum, SCONF_CREATE_PURPOSE) != 0){
         sconf_debug(__func__, "ERROR", "failed to end new config (%s)\n", _file_name);
         return -1;
     }
 
+    sconf_get_checksum_file(_file_name, sconf_checksum);
+
+    sconf_debug(__func__, "INFO", "checksum variable: %s\n", valid_checksum);
+    sconf_debug(__func__, "INFO", "checksum file: %s\n", sconf_checksum);
+
+    if (strcmp(valid_checksum, sconf_checksum) != 0){
+        sconf_debug(__func__, "INFO", "checksum variable: %s\n", valid_checksum);
+        sconf_debug(__func__, "INFO", "checksum file: %s\n", sconf_checksum);
+        sconf_debug(__func__, "WARNING", "problem on checksum (%s)\n", _file_name);
+    }
     sconf_close_config(_file_name);
     return 0;
 }
 
 int8_t sconf_write_config_updates(char *_file_name){
+    char sconf_checksum[(2*sizeof(long))+1];
+    char valid_checksum[(2*sizeof(long))+1];
+
+    memset(sconf_checksum, 0x00, sizeof(sconf_checksum));
+    memset(valid_checksum, 0x00, sizeof(valid_checksum));
+
     char tmp_file_name[strlen(_file_name) + 5];
     memset(tmp_file_name, 0x00, sizeof(tmp_file_name));
     sprintf(tmp_file_name, "%s.tmp", _file_name);
 
-    if (sconf_write_config(_file_name, tmp_file_name, SCONF_UPDATE_PURPOSE) != 0){
+    if (sconf_write_config(_file_name, tmp_file_name, valid_checksum, SCONF_UPDATE_PURPOSE) != 0){
         sconf_debug(__func__, "ERROR", "failed to end new config (%s)\n", _file_name);
         return -1;
+    }
+
+    sconf_get_checksum_file(tmp_file_name, sconf_checksum);
+
+
+    if (strcmp(valid_checksum, sconf_checksum) != 0){
+        sconf_debug(__func__, "INFO", "checksum variable: %s\n", valid_checksum);
+        sconf_debug(__func__, "INFO", "checksum file: %s\n", sconf_checksum);
+        sconf_debug(__func__, "WARNING", "problem on checksum (%s). process aborted!\n", _file_name);
+        return -2;
     }
 
     remove(_file_name);

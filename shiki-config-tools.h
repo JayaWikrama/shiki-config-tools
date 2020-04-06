@@ -32,6 +32,8 @@ typedef enum {
 
 int8_t sconf_setup(sconf_setup_parameter _parameters, uint16_t _value);
 
+int8_t sconf_get_checksum_file(char *_file_name, char *_checksum);
+
 int8_t sconf_open_config(char *_file_name);
 int8_t sconf_print_config(char *_file_name);
 int8_t sconf_close_config(char *_file_name);
