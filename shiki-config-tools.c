@@ -243,7 +243,7 @@ int8_t sconf_copy_list(const char *_file_name, const char *_header_key, const ch
     shilink_fill_custom_data(
      &conf_data,
      (void *) "SCONF_FILE_NAME",
-     14,
+     15,
      (void *) _file_name,
      (uint16_t) strlen(_file_name),
      SL_TEXT
@@ -332,7 +332,7 @@ int8_t sconf_open_config(const char *_file_name){
     shilink_fill_custom_data(
      &conf_data,
      (void *) "SCONF_FILE_NAME",
-     14,
+     15,
      (void *) _file_name,
      (uint16_t) strlen(_file_name),
      SL_TEXT
@@ -817,7 +817,7 @@ int8_t sconf_remove_config_by_keyword(const char* _file_name, const char* _key, 
     }
     memset (keyword, 0x00, SCONF_MAX_BUFF*sizeof(char));
 	va_start(aptr, _key);
-	vsnprintf(keyword, (SCONF_MAX_BUFF - 1), keyword, aptr);
+	vsnprintf(keyword, (SCONF_MAX_BUFF - 1), _key, aptr);
 	va_end(aptr);
 
     if (strlen(keyword) > (SCONF_MAX_BUFF - 1)){
