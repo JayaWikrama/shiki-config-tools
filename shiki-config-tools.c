@@ -74,27 +74,27 @@ static void sconf_debug(const char *_function_name, sconf_debug_type _debug_type
 
         #ifdef __linux__
             if (_debug_type == SCONF_DEBUG_INFO)
-                printf("%02d-%02d-%04d %02d:%02d:%02d.%03d\033[0;34m STCP\033[1;32m INFO\033[0m %s: ",
+                printf("%02d-%02d-%04d %02d:%02d:%02d.%03d\033[0;34m SCONF\033[1;32m INFO\033[0m %s: ",
                  d_tm->tm_mday, d_tm->tm_mon+1, d_tm->tm_year+1900, d_tm->tm_hour, d_tm->tm_min, d_tm->tm_sec,
                  msec, _function_name
                 );
             else if (_debug_type == SCONF_DEBUG_VERSION)
-                printf("%02d-%02d-%04d %02d:%02d:%02d.%03d\033[0;34m STCP\033[1;32m VERSION\033[0m %s: ",
+                printf("%02d-%02d-%04d %02d:%02d:%02d.%03d\033[0;34m SCONF\033[1;32m VERSION\033[0m %s: ",
                  d_tm->tm_mday, d_tm->tm_mon+1, d_tm->tm_year+1900, d_tm->tm_hour, d_tm->tm_min, d_tm->tm_sec,
                  msec, _function_name
                 );
     	    else if (_debug_type == SCONF_DEBUG_WARNING)
-                printf("%02d-%02d-%04d %02d:%02d:%02d.%03d\033[0;34m STCP\033[1;33m WARNING\033[0m %s: ",
+                printf("%02d-%02d-%04d %02d:%02d:%02d.%03d\033[0;34m SCONF\033[1;33m WARNING\033[0m %s: ",
                  d_tm->tm_mday, d_tm->tm_mon+1, d_tm->tm_year+1900, d_tm->tm_hour, d_tm->tm_min, d_tm->tm_sec,
                  msec, _function_name
                 );
     	    else if (_debug_type == SCONF_DEBUG_ERROR)
-                printf("%02d-%02d-%04d %02d:%02d:%02d.%03d\033[0;34m STCP\033[1;31m ERROR\033[0m %s: ",
+                printf("%02d-%02d-%04d %02d:%02d:%02d.%03d\033[0;34m SCONF\033[1;31m ERROR\033[0m %s: ",
                  d_tm->tm_mday, d_tm->tm_mon+1, d_tm->tm_year+1900, d_tm->tm_hour, d_tm->tm_min, d_tm->tm_sec,
                  msec, _function_name
                 );
             else if (_debug_type == SCONF_DEBUG_CRITICAL)
-                printf("%02d-%02d-%04d %02d:%02d:%02d.%03d\033[0;34m STCP\033[1;31m CRITICAL\033[0m %s: ",
+                printf("%02d-%02d-%04d %02d:%02d:%02d.%03d\033[0;34m SCONF\033[1;31m CRITICAL\033[0m %s: ",
                  d_tm->tm_mday, d_tm->tm_mon+1, d_tm->tm_year+1900, d_tm->tm_hour, d_tm->tm_min, d_tm->tm_sec,
                  msec, _function_name
                 );
