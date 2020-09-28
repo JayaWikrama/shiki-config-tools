@@ -42,7 +42,10 @@ int8_t sconf_copy_list(const char *_file_name, const char *_header_key, const ch
 int8_t sconf_get_list(const char *_file_name, sconfList *_target);
 int8_t sconf_open_config(const char *_file_name);
 int8_t sconf_print_config(const char *_file_name);
+void sconf_print_file_list();
+void sconf_print_all();
 int8_t sconf_close_config(const char *_file_name);
+void sconf_close_all();
 
 int8_t sconf_get_config_n(const char* _file_name, const char *_key, uint8_t _pos, char *_return_value);
 int8_t sconf_get_config(const char* _file_name, const char *_key, char *_return_value);

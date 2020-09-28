@@ -30,7 +30,6 @@ typedef enum {
 } sconf_debug_type;
 
 int8_t sconf_debug_mode_status = 1;
-int8_t init_state = 0;
 
 uint16_t SCONF_MAX_BUFF = 256;
 uint8_t SCONF_OPEN_TRY_TIMES = 1;
@@ -111,6 +110,42 @@ static void sconf_debug(const char *_function_name, sconf_debug_type _debug_type
 	    vfprintf(stdout, _debug_msg, aptr);
 	    va_end(aptr);
     }
+}
+
+static SHLink sconf_get_config_file_in_list(const char *_file_name){
+    SHLinkCustomData data_result;
+    if (shilink_search_data_by_position(
+     sconf_list,
+     (void *) _file_name,
+     (uint16_t) (strlen(_file_name) % UINT16_MAX),
+     0,
+     &data_result
+    )){
+        return NULL;
+    }
+    return data_result.sl_value;
+}
+
+static int8_t sconf_add_file(const char *_file_name, const SHLink _conf_list){
+    SHLinkCustomData data_add;
+    if (shilink_fill_custom_data(
+     &data_add,
+     (void *) _file_name,
+     (uint16_t) (strlen(_file_name) % UINT16_MAX),
+     NULL,
+     0,
+     SL_POINTER
+    )){
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to generate list for file (%s)\n", _file_name);
+        return 0x01;
+    }
+    data_add.sl_value = (void *) _conf_list;
+    if (shilink_append(&sconf_list, data_add)){
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to add list for file (%s)\n", _file_name);
+        shilink_free_custom_data(&data_add);
+        return 0x02;
+    }
+    return 0x00;
 }
 
 static void sconf_append_data_checksum(unsigned char *_checksum_data, const unsigned char *_data, uint16_t _sizeof_data){
@@ -218,24 +253,11 @@ int8_t sconf_setup(sconf_setup_parameter _parameters, uint16_t _value){
     return 0;
 }
 
-int8_t sconf_init(){
-    if (init_state == 0x01){
-        sconf_debug(__func__, SCONF_DEBUG_WARNING, "you have done the init process before\n");
-        return 1;
-    }
-    sconf_debug(__func__, SCONF_DEBUG_VERSION, "%s\n", SCONF_VERSION);
-    init_state = 0x01;
-    sconf_list = NULL;
-    return 0;
-}
-
 int8_t sconf_copy_list(const char *_file_name, const char *_header_key, const char *_header_value, sconfList _source){
-    if (init_state == 0x00){
-        sconf_init();
-    }
-
-    if (sconf_list != NULL){
-        sconf_debug(__func__, SCONF_DEBUG_WARNING, "sconf is used by \"%s\". process aborted\n", sconf_list->sl_data.sl_value);
+    SHLink sconf_tmp = NULL;
+    sconf_tmp = sconf_get_config_file_in_list(_file_name);
+    if (sconf_tmp != NULL){
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "config for \"%s\" already exist.. process aborted!\n", _file_name);
         return -3;
     }
 
@@ -248,7 +270,7 @@ int8_t sconf_copy_list(const char *_file_name, const char *_header_key, const ch
      (uint16_t) strlen(_file_name),
      SL_TEXT
     );
-    shilink_append(&sconf_list, conf_data);
+    shilink_append(&sconf_tmp, conf_data);
     if (_header_key != NULL && _header_value != NULL){
         shilink_fill_custom_data(&conf_data,
          (void *) _header_key,
@@ -257,37 +279,38 @@ int8_t sconf_copy_list(const char *_file_name, const char *_header_key, const ch
          (uint16_t) strlen(_header_value),
          SL_TEXT
         );
-        shilink_append(&sconf_list, conf_data);
-        sconf_list->sh_next->sh_next = _source;
+        shilink_append(&sconf_tmp, conf_data);
+        sconf_tmp->sh_next->sh_next = _source;
     }
     else {
-        sconf_list->sh_next = _source;
+        sconf_tmp->sh_next = _source;
+    }
+    if (sconf_add_file(_file_name, sconf_tmp)){
+        shilink_free(&sconf_tmp);
+        sconf_tmp = NULL;
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to copy list for %s\n", _file_name);
+        return -4;
     }
     return 0;
 }
 
 int8_t sconf_get_list(const char *_file_name, sconfList *_target){
-    if (init_state == 0x00 || sconf_list == NULL){
-        sconf_debug(__func__, SCONF_DEBUG_WARNING, "sconf list not ready yet\n");
+    SHLink sconf_tmp = NULL;
+    sconf_tmp = sconf_get_config_file_in_list(_file_name);
+    if (sconf_tmp == NULL){
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "configuration for (%s) is not exist or not opened yet.. process aborted!\n", _file_name);
         return -3;
     }
 
-    if (strcmp(_file_name, sconf_list->sl_data.sl_value) != 0){
-        sconf_debug(__func__, SCONF_DEBUG_WARNING, "sconf if used by \"%s\". process aborted\n", sconf_list->sl_data.sl_value);
-        return -3;
-    }
-
-    *_target = sconf_list;
+    *_target = sconf_tmp;
     return 0;
 }
 
 int8_t sconf_open_config(const char *_file_name){
-    if (init_state == 0x00){
-        sconf_init();
-    }
-
-    if (sconf_list != NULL){
-        sconf_debug(__func__, SCONF_DEBUG_WARNING, "sconf if used by \"%s\". process aborted\n", sconf_list->sl_data.sl_value);
+    SHLink sconf_tmp = NULL;
+    sconf_tmp = sconf_get_config_file_in_list(_file_name);
+    if (sconf_tmp != NULL){
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "you have opened the configuration (%s).. process aborted!\n", _file_name);
         return -3;
     }
 
@@ -337,7 +360,7 @@ int8_t sconf_open_config(const char *_file_name){
      (uint16_t) strlen(_file_name),
      SL_TEXT
     );
-    shilink_append(&sconf_list, conf_data);
+    shilink_append(&sconf_tmp, conf_data);
 
 	memset(buff_init, 0x00, conf_size*sizeof(char));
 	memset(buff_conf, 0x00, conf_size*sizeof(char));
@@ -357,7 +380,7 @@ int8_t sconf_open_config(const char *_file_name){
                  (void *) buff_conf,
                  (uint16_t) strlen(buff_conf),
                  SL_TEXT);
-                shilink_append(&sconf_list, conf_data);
+                shilink_append(&sconf_tmp, conf_data);
 
 		    	memset(buff_init, 0x00, (strlen(buff_init) + 1)*sizeof(char));
 		    	memset(buff_conf, 0x00, (strlen(buff_conf) + 1)*sizeof(char));
@@ -409,7 +432,7 @@ int8_t sconf_open_config(const char *_file_name){
          (uint16_t) strlen(buff_init),
          SL_TEXT
         );
-        shilink_append(&sconf_list, conf_data);
+        shilink_append(&sconf_tmp, conf_data);
     }
     
     free(buff_init);
@@ -418,65 +441,107 @@ int8_t sconf_open_config(const char *_file_name){
     buff_conf = NULL;
 	fclose(conf_file);
     conf_file = NULL;
+
+    if (sconf_add_file(_file_name, sconf_tmp)){
+        shilink_free(&sconf_tmp);
+        sconf_tmp = NULL;
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to copy list for %s\n", _file_name);
+        return -4;
+    }
     return 0;
 }
 
 int8_t sconf_print_config(const char *_file_name){
-    if (init_state == 0x00){
-        sconf_init();
+    SHLink sconf_tmp = NULL;
+    sconf_tmp = sconf_get_config_file_in_list(_file_name);
+    if (sconf_tmp == NULL){
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "configuration for (%s) is not exist or not opened yet.. process aborted!\n", _file_name);
+        return -3;
     }
-    if (sconf_list == NULL){
-        sconf_debug(__func__, SCONF_DEBUG_ERROR, "config is not ready\n");
-        return -1;
-    }
-    if(strcmp(sconf_list->sl_data.sl_value, _file_name) != 0){
-        sconf_debug(__func__, SCONF_DEBUG_WARNING, "current config is not \"%s\", but \"%s\"\n",
-         _file_name, sconf_list->sl_data.sl_value
-        );
-        return -2;
-    }
-    shilink_print(sconf_list);
+    shilink_print(sconf_tmp);
     return 0;
+}
+
+void sconf_print_file_list(){
+    SHLink sconf_print = sconf_list;
+    SHLink sconf_tmp = NULL;
+    if (sconf_print == NULL){
+        sconf_debug(__func__, SCONF_DEBUG_INFO, "null configuration file in list\n");
+    }
+    while (sconf_print != NULL){
+        sconf_tmp = sconf_print;
+        sconf_print = sconf_print->sh_next;
+        sconf_debug(__func__, SCONF_DEBUG_INFO, "config available: %s\n", (char *) sconf_tmp->sl_data.sl_key);
+    }
+}
+
+void sconf_print_all(){
+    SHLink sconf_print = sconf_list;
+    SHLink sconf_tmp = NULL;
+    if (sconf_print == NULL){
+        sconf_debug(__func__, SCONF_DEBUG_INFO, "null configuration file in list\n");
+    }
+    while (sconf_print != NULL){
+        sconf_tmp = sconf_print;
+        sconf_print = sconf_print->sh_next;
+        sconf_debug(__func__, SCONF_DEBUG_INFO, "config available: %s\n", (char *) sconf_tmp->sl_data.sl_key);
+        sconf_print_config((const char *) sconf_tmp->sl_data.sl_key);
+    }
 }
 
 int8_t sconf_close_config(const char *_file_name){
-    if (init_state == 0x00){
-        sconf_init();
+    SHLink sconf_tmp = NULL;
+    sconf_tmp = sconf_get_config_file_in_list(_file_name);
+    if (sconf_tmp == NULL){
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "configuration for (%s) is not exist or not opened yet.. process aborted!\n", _file_name);
+        return -3;
     }
-    if (sconf_list == NULL){
-        sconf_debug(__func__, SCONF_DEBUG_ERROR, "config is not ready\n");
-        return -1;
+    SHLinkCustomData data_deleted;
+    shilink_free(&(sconf_tmp->sh_next));
+    shilink_fill_custom_data(
+     &data_deleted,
+     (void *) _file_name,
+     (uint16_t) (strlen(_file_name) % UINT16_MAX),
+     NULL,
+     0,
+     SL_POINTER
+    );
+    if (shilink_delete(&sconf_list, data_deleted)){
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "configuration for (%s) has been free, but failed to deleted from list.\n", _file_name);
+        return -4;
     }
-    if(strcmp(sconf_list->sl_data.sl_value, _file_name) != 0){
-        sconf_debug(__func__, SCONF_DEBUG_WARNING, "current config is not \"%s\", but \"%s\"\n",
-         _file_name, sconf_list->sl_data.sl_value
-        );
-        return -2;
-    }
-    shilink_free(&sconf_list);
     return 0;
 }
 
+void sconf_close_all(){
+    SHLink sconf_tmp = NULL;
+    while (sconf_list != NULL){
+        sconf_tmp = sconf_list;
+        sconf_list = sconf_list->sh_next;
+        sconf_debug(__func__, SCONF_DEBUG_INFO, "close config: %s\n", (char *) sconf_tmp->sl_data.sl_key);
+        shilink_free((SHLink *) &(sconf_tmp->sl_data.sl_value));
+        free(sconf_tmp->sl_data.sl_key);
+        sconf_tmp->sl_data.sl_key = NULL;
+        sconf_tmp->sl_data.sl_value = NULL;
+        free(sconf_tmp);
+        sconf_tmp = NULL;
+    }
+    sconf_list = NULL;
+}
+
 int8_t sconf_get_config_n(const char* _file_name, const char *_key, uint8_t _pos, char *_return_value){
-    if (init_state == 0x00){
-        sconf_init();
-    }
-    if (sconf_list == NULL){
-        sconf_debug(__func__, SCONF_DEBUG_ERROR, "config is not ready\n");
-        return -1;
-    }
-    if(strcmp(sconf_list->sl_data.sl_value, _file_name) != 0){
-        sconf_debug(__func__, SCONF_DEBUG_WARNING, "current config is not \"%s\", but \"%s\"\n",
-         _file_name, sconf_list->sl_data.sl_value
-        );
-        return -2;
+    SHLink sconf_tmp = NULL;
+    sconf_tmp = sconf_get_config_file_in_list(_file_name);
+    if (sconf_tmp == NULL){
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "configuration for (%s) is not exist or not opened yet.. process aborted!\n", _file_name);
+        return -3;
     }
     SHLinkCustomData data_return;
     data_return.sl_key = NULL;
     data_return.sl_value = NULL;
     int8_t retval = 0;
     retval = shilink_search_data_by_position(
-     sconf_list,
+     sconf_tmp,
      (void *) _key,
      (uint16_t) strlen(_key),
      _pos,
@@ -500,17 +565,10 @@ int8_t sconf_get_config(const char* _file_name, const char *_key, char *_return_
 }
 
 char *sconf_get_config_as_string_n(const char* _file_name, const char *_key, uint8_t _pos){
-    if (init_state == 0x00){
-        sconf_init();
-    }
-    if (sconf_list == NULL){
-        sconf_debug(__func__, SCONF_DEBUG_ERROR, "config is not ready\n");
-        return NULL;
-    }
-    if(strcmp(sconf_list->sl_data.sl_value, _file_name) != 0){
-        sconf_debug(__func__, SCONF_DEBUG_WARNING, "current config is not \"%s\", but \"%s\"\n",
-         _file_name, sconf_list->sl_data.sl_value
-        );
+    SHLink sconf_tmp = NULL;
+    sconf_tmp = sconf_get_config_file_in_list(_file_name);
+    if (sconf_tmp == NULL){
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "configuration for (%s) is not exist or not opened yet.. process aborted!\n", _file_name);
         return NULL;
     }
     SHLinkCustomData data_return;
@@ -518,7 +576,7 @@ char *sconf_get_config_as_string_n(const char* _file_name, const char *_key, uin
     data_return.sl_value = NULL;
     int8_t retval = 0;
     retval = shilink_search_data_by_position(
-     sconf_list,
+     sconf_tmp,
      (void *) _key,
      (uint16_t) strlen(_key),
      _pos,
@@ -603,18 +661,11 @@ static int8_t sconf_update_config(
  const char* _old_value,
  const char* _new_value
 ){
-    if (init_state == 0){
-        sconf_init();
-    }
-    if (sconf_list == NULL){
-        sconf_debug(__func__, SCONF_DEBUG_ERROR, "config is not ready\n");
-        return -1;
-    }
-    if(strcmp(sconf_list->sl_data.sl_value, _file_name) != 0){
-        sconf_debug(__func__, SCONF_DEBUG_WARNING, "current config is not \"%s\", but \"%s\"\n",
-         _file_name, sconf_list->sl_data.sl_value
-        );
-        return -2;
+    SHLink sconf_tmp = NULL;
+    sconf_tmp = sconf_get_config_file_in_list(_file_name);
+    if (sconf_tmp == NULL){
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "configuration for (%s) is not exist or not opened yet.. process aborted!\n", _file_name);
+        return -3;
     }
 
     if (strcmp(_old_key, _new_key) != 0){
@@ -659,7 +710,7 @@ static int8_t sconf_update_config(
     );
 
     int8_t retval = 0;
-    retval = shilink_update(&sconf_list, data_old, data_new);
+    retval = shilink_update(&sconf_tmp, data_old, data_new);
     if (retval == -2){
         sconf_debug(__func__, SCONF_DEBUG_WARNING, "can't found specific data\n");
         return -3;
@@ -774,18 +825,11 @@ int8_t sconf_update_config_keyword(
 }
 
 static int8_t sconf_remove_config(const char* _file_name, const char* _key, const char* _value){
-    if (init_state == 0){
-        sconf_init();
-    }
-    if (sconf_list == NULL){
-        sconf_debug(__func__, SCONF_DEBUG_ERROR, "config is not ready\n");
-        return -1;
-    }
-    if(strcmp(sconf_list->sl_data.sl_value, _file_name) != 0){
-        sconf_debug(__func__, SCONF_DEBUG_WARNING, "current config is not \"%s\", but \"%s\"\n",
-         _file_name, sconf_list->sl_data.sl_value
-        );
-        return -2;
+    SHLink sconf_tmp = NULL;
+    sconf_tmp = sconf_get_config_file_in_list(_file_name);
+    if (sconf_tmp == NULL){
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "configuration for (%s) is not exist or not opened yet.. process aborted!\n", _file_name);
+        return -3;
     }
 
     SHLinkCustomData data_rm;
@@ -799,7 +843,7 @@ static int8_t sconf_remove_config(const char* _file_name, const char* _key, cons
     );
 
     int8_t retval = 0;
-    retval = shilink_delete(&sconf_list, data_rm);
+    retval = shilink_delete(&sconf_tmp, data_rm);
     if (retval != 0){
         sconf_debug(__func__, SCONF_DEBUG_WARNING, "can't found specific data\n");
         return -3;
@@ -893,17 +937,11 @@ int8_t sconf_enable_config_by_keyword_and_value(const char *_file_name, const ch
 }
 
 int8_t sconf_generate_new_config_start(const char *_file_name){
-    if (init_state == 0){
-        sconf_init();
-    }
-
-    if (sconf_list != NULL){
-        if(strcmp(sconf_list->sl_data.sl_value, _file_name) != 0){
-            sconf_debug(__func__, SCONF_DEBUG_WARNING, "current config is not \"%s\", but \"%s\"\n",
-             _file_name, sconf_list->sl_data.sl_value
-            );
-            return -1;
-        }
+    SHLink sconf_tmp = NULL;
+    sconf_tmp = sconf_get_config_file_in_list(_file_name);
+    if (sconf_tmp != NULL){
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "configuration for (%s) is alreadey set/used.. process aborted!\n", _file_name);
+        return -3;
     }
 
     SHLinkCustomData conf_data;
@@ -919,7 +957,7 @@ int8_t sconf_generate_new_config_start(const char *_file_name){
         return -2;
     }
 
-    if (shilink_append(&sconf_list, conf_data) != 0){
+    if (shilink_append(&sconf_tmp, conf_data) != 0){
         sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to start to generate new config\n");
         return -3;
     }
@@ -933,35 +971,35 @@ int8_t sconf_generate_new_config_start(const char *_file_name){
      SL_POINTER
     ) != 0){
         sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to start to generate new config\n");
-        shilink_free(&sconf_list);
-        sconf_list = NULL;
+        shilink_free(&sconf_tmp);
+        sconf_tmp = NULL;
         return -3;
     }
 
-    if (shilink_append(&sconf_list, conf_data) != 0){
+    if (shilink_append(&sconf_tmp, conf_data) != 0){
         sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to start to generate new config\n");
-        shilink_free(&sconf_list);
+        shilink_free(&sconf_tmp);
         shilink_free_custom_data(&conf_data);
-        sconf_list = NULL;
+        sconf_tmp = NULL;
         return -2;
+    }
+    if (sconf_add_file(_file_name, sconf_tmp)){
+        shilink_free(&sconf_tmp);
+        sconf_tmp = NULL;
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to copy list for %s. process aborted!\n", _file_name);
+        return -4;
     }
     return 0;
 }
 
 int8_t sconf_insert_config(const char *_file_name, sconf_rules _rules, const char *_key, const char *_value, ...){
-    if (init_state == 0x00){
-        sconf_init();
+    SHLink sconf_tmp = NULL;
+    sconf_tmp = sconf_get_config_file_in_list(_file_name);
+    if (sconf_tmp == NULL){
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "configuration for (%s) is not exist or not opened yet.. process aborted!\n", _file_name);
+        return -3;
     }
-    if (sconf_list == NULL){
-        sconf_debug(__func__, SCONF_DEBUG_ERROR, "config is not ready\n");
-        return -1;
-    }
-    if(strcmp(sconf_list->sl_data.sl_value, _file_name) != 0){
-        sconf_debug(__func__, SCONF_DEBUG_WARNING, "current config is not \"%s\", but \"%s\"\n",
-         _file_name, sconf_list->sl_data.sl_value
-        );
-        return -2;
-    }
+
     if (_rules == SCONF_RULES_REFUSE_DUPLICATE_KEY){
         char value[SCONF_MAX_BUFF];
         if (sconf_get_config_n(_file_name, _key, 0, value) == 0){
@@ -1030,8 +1068,8 @@ int8_t sconf_insert_config(const char *_file_name, sconf_rules _rules, const cha
     new_value = NULL;
 
     if (strcmp(_key, "add_info") != 0){
-        if (shilink_insert_before(&sconf_list, cond_data, conf_data) != 0){
-            if (shilink_append(&sconf_list, conf_data) != 0){
+        if (shilink_insert_before(&sconf_tmp, cond_data, conf_data) != 0){
+            if (shilink_append(&sconf_tmp, conf_data) != 0){
                 sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to insert new config (3)\n");
                 shilink_free_custom_data(&cond_data);
                 return -5;
@@ -1039,7 +1077,7 @@ int8_t sconf_insert_config(const char *_file_name, sconf_rules _rules, const cha
         }
     }
     else {
-        if (shilink_insert_after(&sconf_list, cond_data, conf_data) != 0){
+        if (shilink_insert_after(&sconf_tmp, cond_data, conf_data) != 0){
             sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to insert new config (3)\n");
             shilink_free_custom_data(&cond_data);
             return -5;
@@ -1063,18 +1101,16 @@ static int8_t sconf_write_config(
  char *_valid_checksum,
  sconf_purpose_parameter _param
 ){
-    if (init_state == 0){
-        sconf_init();
+    SHLink sconf_tmp = NULL;
+    sconf_tmp = sconf_get_config_file_in_list(_file_name);
+    if (sconf_tmp == NULL){
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "configuration for (%s) is not exist or not opened yet.. process aborted!\n", _file_name);
+        return -3;
     }
 
-    if (sconf_list == NULL){
-        sconf_debug(__func__, SCONF_DEBUG_ERROR, "config is not ready\n");
-        return -1;
-    }
-
-    if(strcmp(sconf_list->sl_data.sl_value, _file_name) != 0){
+    if(strcmp(sconf_tmp->sl_data.sl_value, _file_name) != 0){
         sconf_debug(__func__, SCONF_DEBUG_WARNING, "current config is not \"%s\", but \"%s\"\n",
-         _file_name, sconf_list->sl_data.sl_value
+         _file_name, sconf_tmp->sl_data.sl_value
         );
         return -2;
     }
@@ -1137,7 +1173,7 @@ static int8_t sconf_write_config(
     sconf_bytes[1] = 0x00;
 
     do {
-        retval = shilink_get_data_by_position(sconf_list, idx_pos, &data_conf);
+        retval = shilink_get_data_by_position(sconf_tmp, idx_pos, &data_conf);
         if (retval == 0){
             if (end_state == 0){
                 if (strcmp(data_conf.sl_key, "add_info") == 0){
@@ -1259,19 +1295,25 @@ int8_t sconf_write_config_updates(const char *_file_name){
 }
 
 int8_t sconf_release_config_list(const char *_file_name){
-    if (init_state == 0){
-        sconf_init();
+    SHLink sconf_tmp = NULL;
+    sconf_tmp = sconf_get_config_file_in_list(_file_name);
+    if (sconf_tmp == NULL){
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "configuration for (%s) is not exist or not opened yet.. process aborted!\n", _file_name);
+        return -3;
     }
-    if (sconf_list == NULL){
-        sconf_debug(__func__, SCONF_DEBUG_ERROR, "config is not ready\n");
-        return -1;
+    SHLinkCustomData data_deleted;
+    shilink_free(&(sconf_tmp->sh_next));
+    shilink_fill_custom_data(
+     &data_deleted,
+     (void *) _file_name,
+     (uint16_t) (strlen(_file_name) % UINT16_MAX),
+     NULL,
+     0,
+     SL_POINTER
+    );
+    if (shilink_delete(&sconf_list, data_deleted)){
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "configuration for (%s) has been free, but failed to release from list.\n", _file_name);
+        return -4;
     }
-    if(strcmp(sconf_list->sl_data.sl_value, _file_name) != 0){
-        sconf_debug(__func__, SCONF_DEBUG_WARNING, "current config is not \"%s\", but \"%s\"\n",
-         _file_name, (char *) sconf_list->sl_data.sl_value
-        );
-        return -2;
-    }
-    sconf_list = NULL;
     return 0;
 }
