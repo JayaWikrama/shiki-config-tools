@@ -21,6 +21,14 @@
 
 #define sconf_get_var_name(_var) #_var
 
+typedef enum {
+  SCONF_DEBUG_INFO = 0x00,
+  SCONF_DEBUG_VERSION = 0x01,
+  SCONF_DEBUG_WARNING = 0x02,
+  SCONF_DEBUG_ERROR = 0x03,
+  SCONF_DEBUG_CRITICAL = 0x04
+} sconf_debug_type;
+
 int8_t sconf_debug_mode_status = 1;
 int8_t init_state = 0;
 
@@ -34,13 +42,13 @@ int8_t SCONF_SKIP_SPACE_FROM_LINE = SCONF_CHECK_WITH_SPACE;
 
 SHLink sconf_list;
 
-static void sconf_debug(const char *function_name, char *debug_type, char *debug_msg, ...);
+static void sconf_debug(const char *_function_name, sconf_debug_type _debug_type, const char *_debug_msg, ...);
 static int8_t sconf_update_config(char* _file_name, sconf_rules _rules, char* _old_key, char* _new_key, char* _old_value, char* _new_value);
 static int8_t sconf_remove_config(char* _file_name, char* _key, char* _value);
 static int8_t sconf_write_config(char *_file_name, char *_file_alias, char *_valid_checksum, sconf_purpose_parameter _param);
 
-static void sconf_debug(const char *function_name, char *debug_type, char *debug_msg, ...){
-	if (sconf_debug_mode_status == 1 || strcmp(debug_type, "INFO") != 0){
+static void sconf_debug(const char *_function_name, sconf_debug_type _debug_type, const char *_debug_msg, ...){
+	if (sconf_debug_mode_status == 1 || _debug_type != SCONF_DEBUG_INFO){
         struct tm *d_tm = NULL;
         struct timeval tm_debug;
         uint16_t msec = 0;
@@ -50,36 +58,41 @@ static void sconf_debug(const char *function_name, char *debug_type, char *debug
         msec = tm_debug.tv_usec/1000;
 
         #ifdef __linux__
-            if (strcmp(debug_type, "INFO")==0)
-                printf("%02d-%02d-%04d %02d:%02d:%02d.%03d\033[0;34m SCONF\033[1;32m %s\033[0m %s: ",
+            if (_debug_type == SCONF_DEBUG_INFO)
+                printf("%02d-%02d-%04d %02d:%02d:%02d.%03d\033[0;34m STCP\033[1;32m INFO\033[0m %s: ",
                  d_tm->tm_mday, d_tm->tm_mon+1, d_tm->tm_year+1900, d_tm->tm_hour, d_tm->tm_min, d_tm->tm_sec,
-                 msec, debug_type, function_name
+                 msec, _function_name
                 );
-    	    else if (strcmp(debug_type, "WARNING")==0)
-                printf("%02d-%02d-%04d %02d:%02d:%02d.%03d\033[0;34m SCONF\033[1;33m %s\033[0m %s: ",
+            else if (_debug_type == SCONF_DEBUG_VERSION)
+                printf("%02d-%02d-%04d %02d:%02d:%02d.%03d\033[0;34m STCP\033[1;32m VERSION\033[0m %s: ",
                  d_tm->tm_mday, d_tm->tm_mon+1, d_tm->tm_year+1900, d_tm->tm_hour, d_tm->tm_min, d_tm->tm_sec,
-                 msec, debug_type, function_name
+                 msec, _function_name
                 );
-    	    else if (strcmp(debug_type, "ERROR")==0)
-                printf("%02d-%02d-%04d %02d:%02d:%02d.%03d\033[0;34m SCONF\033[1;31m %s\033[0m %s: ",
+    	    else if (_debug_type == SCONF_DEBUG_WARNING)
+                printf("%02d-%02d-%04d %02d:%02d:%02d.%03d\033[0;34m STCP\033[1;33m WARNING\033[0m %s: ",
                  d_tm->tm_mday, d_tm->tm_mon+1, d_tm->tm_year+1900, d_tm->tm_hour, d_tm->tm_min, d_tm->tm_sec,
-                 msec, debug_type, function_name
+                 msec, _function_name
                 );
-            else if (strcmp(debug_type, "CRITICAL")==0)
-                printf("%02d-%02d-%04d %02d:%02d:%02d.%03d\033[0;34m SCONF\033[1;31m %s\033[0m %s: ",
+    	    else if (_debug_type == SCONF_DEBUG_ERROR)
+                printf("%02d-%02d-%04d %02d:%02d:%02d.%03d\033[0;34m STCP\033[1;31m ERROR\033[0m %s: ",
                  d_tm->tm_mday, d_tm->tm_mon+1, d_tm->tm_year+1900, d_tm->tm_hour, d_tm->tm_min, d_tm->tm_sec,
-                 msec, debug_type, function_name
+                 msec, _function_name
+                );
+            else if (_debug_type == SCONF_DEBUG_CRITICAL)
+                printf("%02d-%02d-%04d %02d:%02d:%02d.%03d\033[0;34m STCP\033[1;31m CRITICAL\033[0m %s: ",
+                 d_tm->tm_mday, d_tm->tm_mon+1, d_tm->tm_year+1900, d_tm->tm_hour, d_tm->tm_min, d_tm->tm_sec,
+                 msec, _function_name
                 );
 	    #else
-            printf("%02d-%02d-%04d %02d:%02d:%02d.%03d %s: %s: ",
+            printf("%02d-%02d-%04d %02d:%02d:%02d.%03d [%02x]: %s: ",
              d_tm->tm_mday, d_tm->tm_mon+1, d_tm->tm_year+1900, d_tm->tm_hour, d_tm->tm_min, d_tm->tm_sec,
-             msec, debug_type, function_name
+             msec, _debug_type, _function_name
             );
         #endif
 
         va_list aptr;
-        va_start(aptr, debug_msg);
-	    vfprintf(stdout, debug_msg, aptr);
+        va_start(aptr, _debug_msg);
+	    vfprintf(stdout, _debug_msg, aptr);
 	    va_end(aptr);
     }
 }
@@ -135,7 +148,7 @@ int8_t sconf_get_checksum_file(char *_file_name, char *_checksum){
     } while (conf_file == NULL && try_times > 0);
 
     if (conf_file == NULL){
-        sconf_debug(__func__, "ERROR", "failed to open config file\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to open config file\n");
         return -1;
     }
 
@@ -165,7 +178,7 @@ int8_t sconf_setup(sconf_setup_parameter _parameters, uint16_t _value){
             sconf_debug_mode_status = _value;
         }
         else {
-            sconf_debug(__func__, "WARNING", "invalid value\n");
+            sconf_debug(__func__, SCONF_DEBUG_WARNING, "invalid value\n");
         }
     }
     else if (_parameters == SCONF_SET_MAX_BUFFER){
@@ -184,17 +197,17 @@ int8_t sconf_setup(sconf_setup_parameter _parameters, uint16_t _value){
         SCONF_DISABLE_FLAG = (char) _value;
     }
     else {
-        sconf_debug(__func__, "WARNING", "invalid parameters\n");
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "invalid parameters\n");
     }
     return 0;
 }
 
 int8_t sconf_init(){
     if (init_state == 0x01){
-        sconf_debug(__func__, "WARNING", "you have done the init process before\n");
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "you have done the init process before\n");
         return 1;
     }
-    sconf_debug(__func__, "VERSION", "%s\n", SCONF_VERSION);
+    sconf_debug(__func__, SCONF_DEBUG_VERSION, "%s\n", SCONF_VERSION);
     init_state = 0x01;
     sconf_list = NULL;
     return 0;
@@ -206,7 +219,7 @@ int8_t sconf_copy_list(char *_file_name, char *_header_key, char *_header_value,
     }
 
     if (sconf_list != NULL){
-        sconf_debug(__func__, "WARNING", "sconf if used by \"%s\". process aborted\n", sconf_list->sl_data.sl_value);
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "sconf if used by \"%s\". process aborted\n", sconf_list->sl_data.sl_value);
         return -3;
     }
 
@@ -239,12 +252,12 @@ int8_t sconf_copy_list(char *_file_name, char *_header_key, char *_header_value,
 
 int8_t sconf_get_list(char *_file_name, sconfList *_target){
     if (init_state == 0x00 || sconf_list == NULL){
-        sconf_debug(__func__, "WARNING", "sconf list not ready yet\n");
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "sconf list not ready yet\n");
         return -3;
     }
 
     if (strcmp(_file_name, sconf_list->sl_data.sl_value) != 0){
-        sconf_debug(__func__, "WARNING", "sconf if used by \"%s\". process aborted\n", sconf_list->sl_data.sl_value);
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "sconf if used by \"%s\". process aborted\n", sconf_list->sl_data.sl_value);
         return -3;
     }
 
@@ -258,7 +271,7 @@ int8_t sconf_open_config(char *_file_name){
     }
 
     if (sconf_list != NULL){
-        sconf_debug(__func__, "WARNING", "sconf if used by \"%s\". process aborted\n", sconf_list->sl_data.sl_value);
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "sconf if used by \"%s\". process aborted\n", sconf_list->sl_data.sl_value);
         return -3;
     }
 
@@ -271,14 +284,14 @@ int8_t sconf_open_config(char *_file_name){
     } while (conf_file == NULL && try_times > 0);
 
     if (conf_file == NULL){
-        sconf_debug(__func__, "ERROR", "failed to open config file (%s)\n", _file_name);
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to open config file (%s)\n", _file_name);
         return -1;
     }
 
 	char *buff_init = NULL;
     buff_init = (char *) malloc(8*sizeof(char));
     if (buff_init == NULL){
-        sconf_debug(__func__, "ERROR", "failed to allocate buff_init memory\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to allocate buff_init memory\n");
         fclose(conf_file);
         return -2;
     }
@@ -286,7 +299,7 @@ int8_t sconf_open_config(char *_file_name){
     char *buff_conf;
     buff_conf = (char *) malloc(8*sizeof(char));
     if (buff_conf == NULL){
-        sconf_debug(__func__, "ERROR", "failed to allocate buff_conf memory\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to allocate buff_conf memory\n");
         free(buff_init);
         buff_init = NULL;
         fclose(conf_file);
@@ -397,11 +410,11 @@ int8_t sconf_print_config(char *_file_name){
         sconf_init();
     }
     if (sconf_list == NULL){
-        sconf_debug(__func__, "ERROR", "config is not ready\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "config is not ready\n");
         return -1;
     }
     if(strcmp(sconf_list->sl_data.sl_value, _file_name) != 0){
-        sconf_debug(__func__, "WARNING", "current config is not \"%s\", but \"%s\"\n",
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "current config is not \"%s\", but \"%s\"\n",
          _file_name, sconf_list->sl_data.sl_value
         );
         return -2;
@@ -415,11 +428,11 @@ int8_t sconf_close_config(char *_file_name){
         sconf_init();
     }
     if (sconf_list == NULL){
-        sconf_debug(__func__, "ERROR", "config is not ready\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "config is not ready\n");
         return -1;
     }
     if(strcmp(sconf_list->sl_data.sl_value, _file_name) != 0){
-        sconf_debug(__func__, "WARNING", "current config is not \"%s\", but \"%s\"\n",
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "current config is not \"%s\", but \"%s\"\n",
          _file_name, sconf_list->sl_data.sl_value
         );
         return -2;
@@ -433,11 +446,11 @@ int8_t sconf_get_config_n(char* _file_name, char *_key, uint8_t _pos, char *_ret
         sconf_init();
     }
     if (sconf_list == NULL){
-        sconf_debug(__func__, "ERROR", "config is not ready\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "config is not ready\n");
         return -1;
     }
     if(strcmp(sconf_list->sl_data.sl_value, _file_name) != 0){
-        sconf_debug(__func__, "WARNING", "current config is not \"%s\", but \"%s\"\n",
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "current config is not \"%s\", but \"%s\"\n",
          _file_name, sconf_list->sl_data.sl_value
         );
         return -2;
@@ -454,11 +467,11 @@ int8_t sconf_get_config_n(char* _file_name, char *_key, uint8_t _pos, char *_ret
      &data_return
     );
     if (retval != 0){
-        sconf_debug(__func__, "WARNING", "can't found specific data\n");
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "can't found specific data\n");
         return -3;
     }
     if (data_return.sl_value == NULL){
-        sconf_debug(__func__, "WARNING", "value is NULL\n");
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "value is NULL\n");
         strcpy(_return_value, "");
         return -4;
     }
@@ -475,11 +488,11 @@ char *sconf_get_config_as_string_n(char* _file_name, char *_key, uint8_t _pos){
         sconf_init();
     }
     if (sconf_list == NULL){
-        sconf_debug(__func__, "ERROR", "config is not ready\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "config is not ready\n");
         return NULL;
     }
     if(strcmp(sconf_list->sl_data.sl_value, _file_name) != 0){
-        sconf_debug(__func__, "WARNING", "current config is not \"%s\", but \"%s\"\n",
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "current config is not \"%s\", but \"%s\"\n",
          _file_name, sconf_list->sl_data.sl_value
         );
         return NULL;
@@ -496,11 +509,11 @@ char *sconf_get_config_as_string_n(char* _file_name, char *_key, uint8_t _pos){
      &data_return
     );
     if (retval != 0){
-        sconf_debug(__func__, "WARNING", "can't found specific data\n");
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "can't found specific data\n");
         return NULL;
     }
     if (data_return.sl_value == NULL){
-        sconf_debug(__func__, "WARNING", "value is NULL\n");
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "value is NULL\n");
         return NULL;
     }
     return (char *) data_return.sl_value;
@@ -571,11 +584,11 @@ static int8_t sconf_update_config(char* _file_name, sconf_rules _rules, char* _o
         sconf_init();
     }
     if (sconf_list == NULL){
-        sconf_debug(__func__, "ERROR", "config is not ready\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "config is not ready\n");
         return -1;
     }
     if(strcmp(sconf_list->sl_data.sl_value, _file_name) != 0){
-        sconf_debug(__func__, "WARNING", "current config is not \"%s\", but \"%s\"\n",
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "current config is not \"%s\", but \"%s\"\n",
          _file_name, sconf_list->sl_data.sl_value
         );
         return -2;
@@ -585,7 +598,7 @@ static int8_t sconf_update_config(char* _file_name, sconf_rules _rules, char* _o
         if (_rules == SCONF_RULES_REFUSE_DUPLICATE_KEY){
             char value[SCONF_MAX_BUFF];
             if (sconf_get_config_n(_file_name, _new_key, 0, value) == 0){
-              sconf_debug(__func__, "WARNING", "key %s in %s already exist. process aborted\n",
+              sconf_debug(__func__, SCONF_DEBUG_WARNING, "key %s in %s already exist. process aborted\n",
              _new_key, _file_name
              );
              return -8;
@@ -595,7 +608,7 @@ static int8_t sconf_update_config(char* _file_name, sconf_rules _rules, char* _o
             key_tmp[0] = SCONF_DISABLE_FLAG;
             strcat(key_tmp, _new_key);
             if (sconf_get_config_n(_file_name, key_tmp, 0, value) == 0){
-              sconf_debug(__func__, "WARNING", "key %s in %s already exist, but disabled. process aborted\n",
+              sconf_debug(__func__, SCONF_DEBUG_WARNING, "key %s in %s already exist, but disabled. process aborted\n",
              _new_key, _file_name
              );
              return -9;
@@ -625,14 +638,14 @@ static int8_t sconf_update_config(char* _file_name, sconf_rules _rules, char* _o
     int8_t retval = 0;
     retval = shilink_update(&sconf_list, data_old, data_new);
     if (retval == -2){
-        sconf_debug(__func__, "WARNING", "can't found specific data\n");
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "can't found specific data\n");
         return -3;
     }
     else if (retval == -1){
-        sconf_debug(__func__, "ERROR", "process failed\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "process failed\n");
         return -4;
     }
-    sconf_debug(__func__, "INFO", "success to update data\n");
+    sconf_debug(__func__, SCONF_DEBUG_INFO, "success to update data\n");
     return 0;
 }
 
@@ -645,7 +658,7 @@ int8_t sconf_update_config_value(char* _file_name, sconf_rules _rules, char* _ke
     char *new_value = NULL;
     new_value = (char *) malloc(SCONF_MAX_BUFF*sizeof(char));
     if (new_value == NULL){
-        sconf_debug(__func__, "ERROR", "failed to allocate new_value memory\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to allocate new_value memory\n");
         return -3;
     }
     memset (new_value, 0x00, SCONF_MAX_BUFF*sizeof(char));
@@ -654,7 +667,7 @@ int8_t sconf_update_config_value(char* _file_name, sconf_rules _rules, char* _ke
 	va_end(aptr);
 
     if (strlen(new_value) > (SCONF_MAX_BUFF - 1)){
-        sconf_debug(__func__, "WARNING", "new_value memory overflow\n");
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "new_value memory overflow\n");
     }
 
     new_value = (char *) realloc(new_value, (strlen(new_value) + 1));
@@ -671,21 +684,21 @@ int8_t sconf_update_config_keyword(char* _file_name, sconf_rules _rules, char* _
     char *curent_value = NULL;
     curent_value = (char *) malloc(SCONF_MAX_BUFF*sizeof(char));
     if (curent_value == NULL){
-        sconf_debug(__func__, "ERROR", "failed to allocate new_key memory\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to allocate new_key memory\n");
         return -3;
     }
 
     memset(curent_value, 0x00, SCONF_MAX_BUFF*sizeof(char));
 
     if (sconf_get_config(_file_name, _old_key, curent_value) != 0){
-        sconf_debug(__func__, "WARNING", "can't found specific data\n");
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "can't found specific data\n");
         free(curent_value);
         curent_value = NULL;
         return -4;
     }
 
     if (strlen(curent_value) > (SCONF_MAX_BUFF - 1)){
-        sconf_debug(__func__, "WARNING", "new_key memory overflow\n");
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "new_key memory overflow\n");
     }
 
     curent_value = (char *) realloc(curent_value, (strlen(curent_value) + 1));
@@ -694,7 +707,7 @@ int8_t sconf_update_config_keyword(char* _file_name, sconf_rules _rules, char* _
     char *new_key = NULL;
     new_key = (char *) malloc(SCONF_MAX_BUFF*sizeof(char));
     if (new_key == NULL){
-        sconf_debug(__func__, "ERROR", "failed to allocate new_key memory\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to allocate new_key memory\n");
         free(curent_value);
         curent_value = NULL;
         return -3;
@@ -705,7 +718,7 @@ int8_t sconf_update_config_keyword(char* _file_name, sconf_rules _rules, char* _
 	va_end(aptr);
 
     if (strlen(new_key) > (SCONF_MAX_BUFF - 1)){
-        sconf_debug(__func__, "WARNING", "new_key memory overflow\n");
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "new_key memory overflow\n");
     }
 
     new_key = (char *) realloc(new_key, (strlen(new_key) + 1));
@@ -725,11 +738,11 @@ static int8_t sconf_remove_config(char* _file_name, char* _key, char* _value){
         sconf_init();
     }
     if (sconf_list == NULL){
-        sconf_debug(__func__, "ERROR", "config is not ready\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "config is not ready\n");
         return -1;
     }
     if(strcmp(sconf_list->sl_data.sl_value, _file_name) != 0){
-        sconf_debug(__func__, "WARNING", "current config is not \"%s\", but \"%s\"\n",
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "current config is not \"%s\", but \"%s\"\n",
          _file_name, sconf_list->sl_data.sl_value
         );
         return -2;
@@ -748,7 +761,7 @@ static int8_t sconf_remove_config(char* _file_name, char* _key, char* _value){
     int8_t retval = 0;
     retval = shilink_delete(&sconf_list, data_rm);
     if (retval != 0){
-        sconf_debug(__func__, "WARNING", "can't found specific data\n");
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "can't found specific data\n");
         return -3;
     }
     return 0;
@@ -759,7 +772,7 @@ int8_t sconf_remove_config_by_keyword(char* _file_name, char* _key, ...){
     char *keyword = NULL;
     keyword = (char *) malloc(SCONF_MAX_BUFF*sizeof(char));
     if (keyword == NULL){
-        sconf_debug(__func__, "ERROR", "failed to allocate keyword memory\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to allocate keyword memory\n");
         return -3;
     }
     memset (keyword, 0x00, SCONF_MAX_BUFF*sizeof(char));
@@ -768,7 +781,7 @@ int8_t sconf_remove_config_by_keyword(char* _file_name, char* _key, ...){
 	va_end(aptr);
 
     if (strlen(keyword) > (SCONF_MAX_BUFF - 1)){
-        sconf_debug(__func__, "WARNING", "keyword memory overflow\n");
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "keyword memory overflow\n");
     }
 
     keyword = (char *) realloc(keyword, (strlen(keyword) + 1));
@@ -846,7 +859,7 @@ int8_t sconf_generate_new_config_start(char *_file_name){
 
     if (sconf_list != NULL){
         if(strcmp(sconf_list->sl_data.sl_value, _file_name) != 0){
-            sconf_debug(__func__, "WARNING", "current config is not \"%s\", but \"%s\"\n",
+            sconf_debug(__func__, SCONF_DEBUG_WARNING, "current config is not \"%s\", but \"%s\"\n",
              _file_name, sconf_list->sl_data.sl_value
             );
             return -1;
@@ -862,12 +875,12 @@ int8_t sconf_generate_new_config_start(char *_file_name){
      (uint16_t) strlen(_file_name),
      SL_TEXT
     ) != 0){
-        sconf_debug(__func__, "ERROR", "failed to start to generate new config\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to start to generate new config\n");
         return -2;
     }
 
     if (shilink_append(&sconf_list, conf_data) != 0){
-        sconf_debug(__func__, "ERROR", "failed to start to generate new config\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to start to generate new config\n");
         return -3;
     }
 
@@ -879,14 +892,14 @@ int8_t sconf_generate_new_config_start(char *_file_name){
      0,
      SL_POINTER
     ) != 0){
-        sconf_debug(__func__, "ERROR", "failed to start to generate new config\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to start to generate new config\n");
         shilink_free(&sconf_list);
         sconf_list = NULL;
         return -3;
     }
 
     if (shilink_append(&sconf_list, conf_data) != 0){
-        sconf_debug(__func__, "ERROR", "failed to start to generate new config\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to start to generate new config\n");
         shilink_free(&sconf_list);
         shilink_free_custom_data(&conf_data);
         sconf_list = NULL;
@@ -900,11 +913,11 @@ int8_t sconf_insert_config(char *_file_name, sconf_rules _rules, char *_key, cha
         sconf_init();
     }
     if (sconf_list == NULL){
-        sconf_debug(__func__, "ERROR", "config is not ready\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "config is not ready\n");
         return -1;
     }
     if(strcmp(sconf_list->sl_data.sl_value, _file_name) != 0){
-        sconf_debug(__func__, "WARNING", "current config is not \"%s\", but \"%s\"\n",
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "current config is not \"%s\", but \"%s\"\n",
          _file_name, sconf_list->sl_data.sl_value
         );
         return -2;
@@ -912,7 +925,7 @@ int8_t sconf_insert_config(char *_file_name, sconf_rules _rules, char *_key, cha
     if (_rules == SCONF_RULES_REFUSE_DUPLICATE_KEY){
         char value[SCONF_MAX_BUFF];
         if (sconf_get_config_n(_file_name, _key, 0, value) == 0){
-          sconf_debug(__func__, "WARNING", "key %s in %s already exist. process aborted\n",
+          sconf_debug(__func__, SCONF_DEBUG_WARNING, "key %s in %s already exist. process aborted\n",
           _key, _file_name
          );
          return -8;
@@ -922,7 +935,7 @@ int8_t sconf_insert_config(char *_file_name, sconf_rules _rules, char *_key, cha
         key_tmp[0] = SCONF_DISABLE_FLAG;
         strcat(key_tmp, _key);
         if (sconf_get_config_n(_file_name, key_tmp, 0, value) == 0){
-          sconf_debug(__func__, "WARNING", "key %s in %s already exist, but disabled. process aborted\n",
+          sconf_debug(__func__, SCONF_DEBUG_WARNING, "key %s in %s already exist, but disabled. process aborted\n",
           _key, _file_name
          );
          return -9;
@@ -933,7 +946,7 @@ int8_t sconf_insert_config(char *_file_name, sconf_rules _rules, char *_key, cha
     char *new_value = NULL;
     new_value = (char *) malloc(SCONF_MAX_BUFF*sizeof(char));
     if (new_value == NULL){
-        sconf_debug(__func__, "ERROR", "failed to allocate new_value memory\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to allocate new_value memory\n");
         return -3;
     }
     memset (new_value, 0x00, SCONF_MAX_BUFF*sizeof(char));
@@ -942,7 +955,7 @@ int8_t sconf_insert_config(char *_file_name, sconf_rules _rules, char *_key, cha
 	va_end(aptr);
 
     if (strlen(new_value) > (SCONF_MAX_BUFF - 1)){
-        sconf_debug(__func__, "WARNING", "new_value memory overflow\n");
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "new_value memory overflow\n");
     }
 
     new_value = (char *) realloc(new_value, (strlen(new_value) + 1));
@@ -957,7 +970,7 @@ int8_t sconf_insert_config(char *_file_name, sconf_rules _rules, char *_key, cha
      0,
      SL_POINTER
     ) != 0){
-        sconf_debug(__func__, "ERROR", "failed to insert new config (1)\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to insert new config (1)\n");
         return -3;
     }
 
@@ -969,7 +982,7 @@ int8_t sconf_insert_config(char *_file_name, sconf_rules _rules, char *_key, cha
      (uint16_t) strlen(new_value),
      SL_TEXT
     ) != 0){
-        sconf_debug(__func__, "ERROR", "failed to insert new config (2)\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to insert new config (2)\n");
         shilink_free_custom_data(&cond_data);
         return -4;
     }
@@ -979,7 +992,7 @@ int8_t sconf_insert_config(char *_file_name, sconf_rules _rules, char *_key, cha
     if (strcmp(_key, "add_info") != 0){
         if (shilink_insert_before(&sconf_list, cond_data, conf_data) != 0){
             if (shilink_append(&sconf_list, conf_data) != 0){
-                sconf_debug(__func__, "ERROR", "failed to insert new config (3)\n");
+                sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to insert new config (3)\n");
                 shilink_free_custom_data(&cond_data);
                 return -5;
             }
@@ -987,7 +1000,7 @@ int8_t sconf_insert_config(char *_file_name, sconf_rules _rules, char *_key, cha
     }
     else {
         if (shilink_insert_after(&sconf_list, cond_data, conf_data) != 0){
-            sconf_debug(__func__, "ERROR", "failed to insert new config (3)\n");
+            sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to insert new config (3)\n");
             shilink_free_custom_data(&cond_data);
             return -5;
         }
@@ -996,10 +1009,10 @@ int8_t sconf_insert_config(char *_file_name, sconf_rules _rules, char *_key, cha
     shilink_free_custom_data(&cond_data);
 
     if (strcmp(_key, "add_info") != 0){
-        sconf_debug(__func__, "INFO", "success to insert %s%c%s as new config\n", _key, new_value);
+        sconf_debug(__func__, SCONF_DEBUG_INFO, "success to insert %s%c%s as new config\n", _key, new_value);
     }
     else {
-        sconf_debug(__func__, "INFO", "success to insert additional information\n");
+        sconf_debug(__func__, SCONF_DEBUG_INFO, "success to insert additional information\n");
     }
     return 0;
 }
@@ -1010,12 +1023,12 @@ static int8_t sconf_write_config(char *_file_name, char *_file_alias, char *_val
     }
 
     if (sconf_list == NULL){
-        sconf_debug(__func__, "ERROR", "config is not ready\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "config is not ready\n");
         return -1;
     }
 
     if(strcmp(sconf_list->sl_data.sl_value, _file_name) != 0){
-        sconf_debug(__func__, "WARNING", "current config is not \"%s\", but \"%s\"\n",
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "current config is not \"%s\", but \"%s\"\n",
          _file_name, sconf_list->sl_data.sl_value
         );
         return -2;
@@ -1039,14 +1052,14 @@ static int8_t sconf_write_config(char *_file_name, char *_file_alias, char *_val
 
     if (_param == SCONF_CREATE_PURPOSE){
         if (conf_file != NULL){
-            sconf_debug(__func__, "ERROR", "config file (%s) already exist. process aborted\n", _file_alias);
+            sconf_debug(__func__, SCONF_DEBUG_ERROR, "config file (%s) already exist. process aborted\n", _file_alias);
             fclose(conf_file);
             return -1;
         }
     }
     else if (_param == SCONF_UPDATE_PURPOSE){
         if (conf_file == NULL){
-            sconf_debug(__func__, "ERROR", "config file (%s) isn't exist. process aborted\n", _file_name);
+            sconf_debug(__func__, SCONF_DEBUG_ERROR, "config file (%s) isn't exist. process aborted\n", _file_name);
             return -1;
         }
         fclose(conf_file);
@@ -1060,7 +1073,7 @@ static int8_t sconf_write_config(char *_file_name, char *_file_alias, char *_val
     } while (conf_file == NULL && try_times > 0);
 
     if (conf_file == NULL){
-        sconf_debug(__func__, "ERROR", "failed to write %s.\n", _file_alias);
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to write %s.\n", _file_alias);
         fclose(conf_file);
         return -2;
     }
@@ -1114,7 +1127,7 @@ static int8_t sconf_write_config(char *_file_name, char *_file_alias, char *_val
         }
         idx_pos++;
         if (idx_pos==32000){
-            sconf_debug(__func__, "WARNING", "sconf reach the limit\n");
+            sconf_debug(__func__, SCONF_DEBUG_WARNING, "sconf reach the limit\n");
             break;
         }
     } while (retval == 0);
@@ -1133,17 +1146,17 @@ int8_t sconf_generate_new_config_end(char *_file_name){
     memset(valid_checksum, 0x00, sizeof(valid_checksum));
 
     if (sconf_write_config(_file_name, _file_name, valid_checksum, SCONF_CREATE_PURPOSE) != 0){
-        sconf_debug(__func__, "ERROR", "failed to end new config (%s)\n", _file_name);
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to end new config (%s)\n", _file_name);
         return -1;
     }
 
     sconf_get_checksum_file(_file_name, sconf_checksum);
 
-    sconf_debug(__func__, "INFO", "checksum variable: %s\n", valid_checksum);
-    sconf_debug(__func__, "INFO", "checksum file: %s\n", sconf_checksum);
+    sconf_debug(__func__, SCONF_DEBUG_INFO, "checksum variable: %s\n", valid_checksum);
+    sconf_debug(__func__, SCONF_DEBUG_INFO, "checksum file: %s\n", sconf_checksum);
 
     if (strcmp(valid_checksum, sconf_checksum) != 0){
-        sconf_debug(__func__, "WARNING", "problem on checksum (%s)\n", _file_name);
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "problem on checksum (%s)\n", _file_name);
     }
     return 0;
 }
@@ -1156,17 +1169,17 @@ int8_t sconf_force_write_config(char *_file_name){
     memset(valid_checksum, 0x00, sizeof(valid_checksum));
 
     if (sconf_write_config(_file_name, _file_name, valid_checksum, SCONF_FORCE_WRITE) != 0){
-        sconf_debug(__func__, "ERROR", "failed to force config (%s)\n", _file_name);
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to force config (%s)\n", _file_name);
         return -1;
     }
 
     sconf_get_checksum_file(_file_name, sconf_checksum);
 
-    sconf_debug(__func__, "INFO", "checksum variable: %s\n", valid_checksum);
-    sconf_debug(__func__, "INFO", "checksum file: %s\n", sconf_checksum);
+    sconf_debug(__func__, SCONF_DEBUG_INFO, "checksum variable: %s\n", valid_checksum);
+    sconf_debug(__func__, SCONF_DEBUG_INFO, "checksum file: %s\n", sconf_checksum);
 
     if (strcmp(valid_checksum, sconf_checksum) != 0){
-        sconf_debug(__func__, "WARNING", "problem on checksum (%s)\n", _file_name);
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "problem on checksum (%s)\n", _file_name);
     }
     return 0;
 }
@@ -1183,7 +1196,7 @@ int8_t sconf_write_config_updates(char *_file_name){
     sprintf(tmp_file_name, "%s.tmp", _file_name);
 
     if (sconf_write_config(_file_name, tmp_file_name, valid_checksum, SCONF_UPDATE_PURPOSE) != 0){
-        sconf_debug(__func__, "ERROR", "failed to end new config (%s)\n", _file_name);
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "failed to end new config (%s)\n", _file_name);
         return -1;
     }
 
@@ -1191,7 +1204,7 @@ int8_t sconf_write_config_updates(char *_file_name){
 
 
     if (strcmp(valid_checksum, sconf_checksum) != 0){
-        sconf_debug(__func__, "WARNING", "problem on checksum (%s). process aborted!\n", _file_name);
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "problem on checksum (%s). process aborted!\n", _file_name);
         return -2;
     }
 
@@ -1205,11 +1218,11 @@ int8_t sconf_release_config_list(char *_file_name){
         sconf_init();
     }
     if (sconf_list == NULL){
-        sconf_debug(__func__, "ERROR", "config is not ready\n");
+        sconf_debug(__func__, SCONF_DEBUG_ERROR, "config is not ready\n");
         return -1;
     }
     if(strcmp(sconf_list->sl_data.sl_value, _file_name) != 0){
-        sconf_debug(__func__, "WARNING", "current config is not \"%s\", but \"%s\"\n",
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "current config is not \"%s\", but \"%s\"\n",
          _file_name, (char *) sconf_list->sl_data.sl_value
         );
         return -2;
