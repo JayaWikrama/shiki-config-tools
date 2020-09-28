@@ -40,12 +40,28 @@ char SCONF_DISABLE_FLAG = '#';
 uint16_t SCONF_MAX_LINE_LENGTH = 200;
 int8_t SCONF_SKIP_SPACE_FROM_LINE = SCONF_CHECK_WITH_SPACE;
 
-SHLink sconf_list;
+SHLink sconf_list = NULL;
 
 static void sconf_debug(const char *_function_name, sconf_debug_type _debug_type, const char *_debug_msg, ...);
-static int8_t sconf_update_config(char* _file_name, sconf_rules _rules, char* _old_key, char* _new_key, char* _old_value, char* _new_value);
-static int8_t sconf_remove_config(char* _file_name, char* _key, char* _value);
-static int8_t sconf_write_config(char *_file_name, char *_file_alias, char *_valid_checksum, sconf_purpose_parameter _param);
+static int8_t sconf_update_config(
+ const char* _file_name,
+ sconf_rules _rules,
+ const char* _old_key,
+ const char* _new_key,
+ const char* _old_value,
+ const char* _new_value
+);
+static int8_t sconf_remove_config(
+ const char* _file_name,
+ const char* _key,
+ const char* _value
+);
+static int8_t sconf_write_config(
+ const char *_file_name,
+ const char *_file_alias,
+ char *_valid_checksum,
+ sconf_purpose_parameter _param
+);
 
 static void sconf_debug(const char *_function_name, sconf_debug_type _debug_type, const char *_debug_msg, ...){
 	if (sconf_debug_mode_status == 1 || _debug_type != SCONF_DEBUG_INFO){
@@ -97,7 +113,7 @@ static void sconf_debug(const char *_function_name, sconf_debug_type _debug_type
     }
 }
 
-static void sconf_append_data_checksum(unsigned char *_checksum_data, unsigned char *_data, uint16_t _sizeof_data){
+static void sconf_append_data_checksum(unsigned char *_checksum_data, const unsigned char *_data, uint16_t _sizeof_data){
     unsigned long cs = 0;
     unsigned long max_cs = 0;
     memcpy(&cs, _checksum_data, sizeof(cs));
@@ -119,7 +135,7 @@ static void sconf_append_data_checksum(unsigned char *_checksum_data, unsigned c
     memcpy(_checksum_data, &cs, sizeof(cs));
 }
 
-static void sconf_output_checksum_string(char *_checksum_str, unsigned char *_checksum_data){
+static void sconf_output_checksum_string(char *_checksum_str, const unsigned char *_checksum_data){
     uint8_t idx_data = 0x00;
     char checksum[(2*sizeof(long))+1];
     char bytes[3];
@@ -134,7 +150,7 @@ static void sconf_output_checksum_string(char *_checksum_str, unsigned char *_ch
     strcpy(_checksum_str, checksum);
 }
 
-int8_t sconf_get_checksum_file(char *_file_name, char *_checksum){
+int8_t sconf_get_checksum_file(const char *_file_name, char *_checksum){
     FILE *conf_file = NULL;
     uint8_t try_times = SCONF_OPEN_TRY_TIMES;
     unsigned char checksum_data[sizeof(long)];
@@ -213,13 +229,13 @@ int8_t sconf_init(){
     return 0;
 }
 
-int8_t sconf_copy_list(char *_file_name, char *_header_key, char *_header_value, sconfList _source){
+int8_t sconf_copy_list(const char *_file_name, const char *_header_key, const char *_header_value, sconfList _source){
     if (init_state == 0x00){
         sconf_init();
     }
 
     if (sconf_list != NULL){
-        sconf_debug(__func__, SCONF_DEBUG_WARNING, "sconf if used by \"%s\". process aborted\n", sconf_list->sl_data.sl_value);
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "sconf is used by \"%s\". process aborted\n", sconf_list->sl_data.sl_value);
         return -3;
     }
 
@@ -250,7 +266,7 @@ int8_t sconf_copy_list(char *_file_name, char *_header_key, char *_header_value,
     return 0;
 }
 
-int8_t sconf_get_list(char *_file_name, sconfList *_target){
+int8_t sconf_get_list(const char *_file_name, sconfList *_target){
     if (init_state == 0x00 || sconf_list == NULL){
         sconf_debug(__func__, SCONF_DEBUG_WARNING, "sconf list not ready yet\n");
         return -3;
@@ -265,7 +281,7 @@ int8_t sconf_get_list(char *_file_name, sconfList *_target){
     return 0;
 }
 
-int8_t sconf_open_config(char *_file_name){
+int8_t sconf_open_config(const char *_file_name){
     if (init_state == 0x00){
         sconf_init();
     }
@@ -405,7 +421,7 @@ int8_t sconf_open_config(char *_file_name){
     return 0;
 }
 
-int8_t sconf_print_config(char *_file_name){
+int8_t sconf_print_config(const char *_file_name){
     if (init_state == 0x00){
         sconf_init();
     }
@@ -423,7 +439,7 @@ int8_t sconf_print_config(char *_file_name){
     return 0;
 }
 
-int8_t sconf_close_config(char *_file_name){
+int8_t sconf_close_config(const char *_file_name){
     if (init_state == 0x00){
         sconf_init();
     }
@@ -441,7 +457,7 @@ int8_t sconf_close_config(char *_file_name){
     return 0;
 }
 
-int8_t sconf_get_config_n(char* _file_name, char *_key, uint8_t _pos, char *_return_value){
+int8_t sconf_get_config_n(const char* _file_name, const char *_key, uint8_t _pos, char *_return_value){
     if (init_state == 0x00){
         sconf_init();
     }
@@ -479,11 +495,11 @@ int8_t sconf_get_config_n(char* _file_name, char *_key, uint8_t _pos, char *_ret
     return 0;
 }
 
-int8_t sconf_get_config(char* _file_name, char *_key, char *_return_value){
+int8_t sconf_get_config(const char* _file_name, const char *_key, char *_return_value){
     return sconf_get_config_n(_file_name, _key, 0, _return_value);
 }
 
-char *sconf_get_config_as_string_n(char* _file_name, char *_key, uint8_t _pos){
+char *sconf_get_config_as_string_n(const char* _file_name, const char *_key, uint8_t _pos){
     if (init_state == 0x00){
         sconf_init();
     }
@@ -519,11 +535,11 @@ char *sconf_get_config_as_string_n(char* _file_name, char *_key, uint8_t _pos){
     return (char *) data_return.sl_value;
 }
 
-char *sconf_get_config_as_string(char* _file_name, char *_key){
+char *sconf_get_config_as_string(const char* _file_name, const char *_key){
     return sconf_get_config_as_string_n(_file_name, _key, 0);
 }
 
-int sconf_get_config_as_int_n(char* _file_name, char *_key, uint8_t _pos){
+int sconf_get_config_as_int_n(const char* _file_name, const char *_key, uint8_t _pos){
     char *conf_as_str = sconf_get_config_as_string_n(_file_name, _key, _pos);
     if (conf_as_str == NULL){
         return 0;
@@ -533,11 +549,11 @@ int sconf_get_config_as_int_n(char* _file_name, char *_key, uint8_t _pos){
     }
 }
 
-int sconf_get_config_as_int(char* _file_name, char *_key){
+int sconf_get_config_as_int(const char* _file_name, const char *_key){
     return sconf_get_config_as_int_n(_file_name, _key, 0);
 }
 
-long sconf_get_config_as_long_n(char* _file_name, char *_key, uint8_t _pos){
+long sconf_get_config_as_long_n(const char* _file_name, const char *_key, uint8_t _pos){
     char *conf_as_str = sconf_get_config_as_string_n(_file_name, _key, _pos);
     if (conf_as_str == NULL){
         return 0;
@@ -547,11 +563,11 @@ long sconf_get_config_as_long_n(char* _file_name, char *_key, uint8_t _pos){
     }
 }
 
-long sconf_get_config_as_long(char* _file_name, char *_key){
+long sconf_get_config_as_long(const char* _file_name, const char *_key){
     return sconf_get_config_as_long_n(_file_name, _key, 0);
 }
 
-long long sconf_get_config_as_long_long_n(char* _file_name, char *_key, uint8_t _pos){
+long long sconf_get_config_as_long_long_n(const char* _file_name, const char *_key, uint8_t _pos){
     char *conf_as_str = sconf_get_config_as_string_n(_file_name, _key, _pos);
     if (conf_as_str == NULL){
         return 0;
@@ -561,11 +577,11 @@ long long sconf_get_config_as_long_long_n(char* _file_name, char *_key, uint8_t 
     }
 }
 
-long long sconf_get_config_as_long_long(char* _file_name, char *_key){
+long long sconf_get_config_as_long_long(const char* _file_name, const char *_key){
     return sconf_get_config_as_long_long_n(_file_name, _key, 0);
 }
 
-float sconf_get_config_as_float_n(char* _file_name, char *_key, uint8_t _pos){
+float sconf_get_config_as_float_n(const char* _file_name, const char *_key, uint8_t _pos){
     char *conf_as_str = sconf_get_config_as_string_n(_file_name, _key, _pos);
     if (conf_as_str == NULL){
         return 0;
@@ -575,11 +591,18 @@ float sconf_get_config_as_float_n(char* _file_name, char *_key, uint8_t _pos){
     }
 }
 
-float sconf_get_config_as_float(char* _file_name, char *_key){
+float sconf_get_config_as_float(const char* _file_name, const char *_key){
     return sconf_get_config_as_float_n(_file_name, _key, 0);
 }
 
-static int8_t sconf_update_config(char* _file_name, sconf_rules _rules, char* _old_key, char* _new_key, char* _old_value, char* _new_value){
+static int8_t sconf_update_config(
+ const char* _file_name,
+ sconf_rules _rules,
+ const char* _old_key,
+ const char* _new_key,
+ const char* _old_value,
+ const char* _new_value
+){
     if (init_state == 0){
         sconf_init();
     }
@@ -649,11 +672,23 @@ static int8_t sconf_update_config(char* _file_name, sconf_rules _rules, char* _o
     return 0;
 }
 
-int8_t sconf_update_config_keyword_and_value(char* _file_name, sconf_rules _rules, char* _old_key, char* _new_key, char* _old_value, char* _new_value){
+int8_t sconf_update_config_keyword_and_value(
+ const char* _file_name,
+ sconf_rules _rules,
+ const char* _old_key,
+ const char* _new_key,
+ const char* _old_value,
+ const char* _new_value
+){
     return sconf_update_config(_file_name, _rules, _old_key, _new_key, _old_value, _new_value);
 }
 
-int8_t sconf_update_config_value(char* _file_name, sconf_rules _rules, char* _key, char* _value, ...){
+int8_t sconf_update_config_value(
+ const char* _file_name,
+ sconf_rules _rules,
+ const char* _key,
+ const char* _value, ...
+){
     va_list aptr;
     char *new_value = NULL;
     new_value = (char *) malloc(SCONF_MAX_BUFF*sizeof(char));
@@ -680,7 +715,12 @@ int8_t sconf_update_config_value(char* _file_name, sconf_rules _rules, char* _ke
     return retval;
 }
 
-int8_t sconf_update_config_keyword(char* _file_name, sconf_rules _rules, char* _old_key, char* _new_key, ...){
+int8_t sconf_update_config_keyword(
+ const char* _file_name,
+ sconf_rules _rules,
+ const char* _old_key,
+ const char* _new_key, ...
+){
     char *curent_value = NULL;
     curent_value = (char *) malloc(SCONF_MAX_BUFF*sizeof(char));
     if (curent_value == NULL){
@@ -733,7 +773,7 @@ int8_t sconf_update_config_keyword(char* _file_name, sconf_rules _rules, char* _
     return retval;
 }
 
-static int8_t sconf_remove_config(char* _file_name, char* _key, char* _value){
+static int8_t sconf_remove_config(const char* _file_name, const char* _key, const char* _value){
     if (init_state == 0){
         sconf_init();
     }
@@ -767,7 +807,7 @@ static int8_t sconf_remove_config(char* _file_name, char* _key, char* _value){
     return 0;
 }
 
-int8_t sconf_remove_config_by_keyword(char* _file_name, char* _key, ...){
+int8_t sconf_remove_config_by_keyword(const char* _file_name, const char* _key, ...){
     va_list aptr;
     char *keyword = NULL;
     keyword = (char *) malloc(SCONF_MAX_BUFF*sizeof(char));
@@ -804,23 +844,23 @@ int8_t sconf_remove_config_by_keyword(char* _file_name, char* _key, ...){
     return retval;
 }
 
-int8_t sconf_remove_config_by_keyword_and_value(char* _file_name, char* _key, char* _value){
+int8_t sconf_remove_config_by_keyword_and_value(const char* _file_name, const char* _key, const char* _value){
     return sconf_remove_config(_file_name, _key, _value);
 }
 
-int8_t sconf_get_additional_information(char *_file_name, char *_aditional_data, uint16_t _max_data_to_get){
+int8_t sconf_get_additional_information(const char *_file_name, char *_aditional_data, uint16_t _max_data_to_get){
     return sconf_get_config_n(_file_name, "add_info", 0, _aditional_data);
 }
 
-int8_t sconf_update_additional_information(char *_file_name, char *_new_additional_data){
+int8_t sconf_update_additional_information(const char *_file_name, const char *_new_additional_data){
     return sconf_update_config_value(_file_name, SCONF_RULES_REFUSE_DUPLICATE_KEY, "add_info", _new_additional_data);
 }
 
-int8_t sconf_set_additional_information(char *_file_name, char *_additional_data){
+int8_t sconf_set_additional_information(const char *_file_name, const char *_additional_data){
     return sconf_insert_config(_file_name, SCONF_RULES_REFUSE_DUPLICATE_KEY, "add_info", _additional_data);
 }
 
-int8_t sconf_disable_config_by_keyword(char *_file_name, char *_key){
+int8_t sconf_disable_config_by_keyword(const char *_file_name, const char *_key){
     char key_tmp[strlen(_key) + 2];
     memset(key_tmp, 0x00, (strlen(_key) + 2) * sizeof(char));
     key_tmp[0] = SCONF_DISABLE_FLAG;
@@ -828,7 +868,7 @@ int8_t sconf_disable_config_by_keyword(char *_file_name, char *_key){
     return sconf_update_config_keyword(_file_name, SCONF_RULES_ALLOW_DUPLICATE_KEY,_key, key_tmp);
 }
 
-int8_t sconf_enable_config_by_keyword(char *_file_name, char *_key){
+int8_t sconf_enable_config_by_keyword(const char *_file_name, const char *_key){
     char key_tmp[strlen(_key) + 2];
     memset(key_tmp, 0x00, (strlen(_key) + 2) * sizeof(char));
     key_tmp[0] = SCONF_DISABLE_FLAG;
@@ -836,7 +876,7 @@ int8_t sconf_enable_config_by_keyword(char *_file_name, char *_key){
     return sconf_update_config_keyword(_file_name, SCONF_RULES_ALLOW_DUPLICATE_KEY, key_tmp, _key);
 }
 
-int8_t sconf_disable_config_by_keyword_and_value(char *_file_name, char *_key, char *_value){
+int8_t sconf_disable_config_by_keyword_and_value(const char *_file_name, const char *_key, const char *_value){
     char key_tmp[strlen(_key) + 2];
     memset(key_tmp, 0x00, (strlen(_key) + 2) * sizeof(char));
     key_tmp[0] = SCONF_DISABLE_FLAG;
@@ -844,7 +884,7 @@ int8_t sconf_disable_config_by_keyword_and_value(char *_file_name, char *_key, c
     return sconf_update_config_keyword_and_value(_file_name, SCONF_RULES_ALLOW_DUPLICATE_KEY, _key, key_tmp, _value, _value);
 }
 
-int8_t sconf_enable_config_by_keyword_and_value(char *_file_name, char *_key, char *_value){
+int8_t sconf_enable_config_by_keyword_and_value(const char *_file_name, const char *_key, const char *_value){
     char key_tmp[strlen(_key) + 2];
     memset(key_tmp, 0x00, (strlen(_key) + 2) * sizeof(char));
     key_tmp[0] = SCONF_DISABLE_FLAG;
@@ -852,7 +892,7 @@ int8_t sconf_enable_config_by_keyword_and_value(char *_file_name, char *_key, ch
     return sconf_update_config_keyword_and_value(_file_name, SCONF_RULES_ALLOW_DUPLICATE_KEY, key_tmp, _key, _value, _value);
 }
 
-int8_t sconf_generate_new_config_start(char *_file_name){
+int8_t sconf_generate_new_config_start(const char *_file_name){
     if (init_state == 0){
         sconf_init();
     }
@@ -908,7 +948,7 @@ int8_t sconf_generate_new_config_start(char *_file_name){
     return 0;
 }
 
-int8_t sconf_insert_config(char *_file_name, sconf_rules _rules, char *_key, char *_value, ...){
+int8_t sconf_insert_config(const char *_file_name, sconf_rules _rules, const char *_key, const char *_value, ...){
     if (init_state == 0x00){
         sconf_init();
     }
@@ -1017,7 +1057,12 @@ int8_t sconf_insert_config(char *_file_name, sconf_rules _rules, char *_key, cha
     return 0;
 }
 
-static int8_t sconf_write_config(char *_file_name, char *_file_alias, char *_valid_checksum, sconf_purpose_parameter _param){
+static int8_t sconf_write_config(
+ const char *_file_name,
+ const char *_file_alias,
+ char *_valid_checksum,
+ sconf_purpose_parameter _param
+){
     if (init_state == 0){
         sconf_init();
     }
@@ -1138,7 +1183,7 @@ static int8_t sconf_write_config(char *_file_name, char *_file_alias, char *_val
     return 0;
 }
 
-int8_t sconf_generate_new_config_end(char *_file_name){
+int8_t sconf_generate_new_config_end(const char *_file_name){
     char sconf_checksum[(2*sizeof(long))+1];
     char valid_checksum[(2*sizeof(long))+1];
 
@@ -1161,7 +1206,7 @@ int8_t sconf_generate_new_config_end(char *_file_name){
     return 0;
 }
 
-int8_t sconf_force_write_config(char *_file_name){
+int8_t sconf_force_write_config(const char *_file_name){
     char sconf_checksum[(2*sizeof(long))+1];
     char valid_checksum[(2*sizeof(long))+1];
 
@@ -1184,7 +1229,7 @@ int8_t sconf_force_write_config(char *_file_name){
     return 0;
 }
 
-int8_t sconf_write_config_updates(char *_file_name){
+int8_t sconf_write_config_updates(const char *_file_name){
     char sconf_checksum[(2*sizeof(long))+1];
     char valid_checksum[(2*sizeof(long))+1];
 
@@ -1213,7 +1258,7 @@ int8_t sconf_write_config_updates(char *_file_name){
     return 0;
 }
 
-int8_t sconf_release_config_list(char *_file_name){
+int8_t sconf_release_config_list(const char *_file_name){
     if (init_state == 0){
         sconf_init();
     }
