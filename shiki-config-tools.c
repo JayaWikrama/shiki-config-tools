@@ -1,6 +1,6 @@
 /*
     lib info    : SHIKI_LIB_GROUP - CONFIG TOOLS
-    ver         : 3.01.20.09.28
+    ver         : 3.02.20.09.28
     author      : Jaya Wikrama, S.T.
     e-mail      : jayawikrama89@gmail.com
     Copyright (c) 2020 HANA,. Jaya Wikrama
@@ -17,7 +17,7 @@
 
 #include "shiki-config-tools.h"
 
-#define SCONF_VERSION "3.01.20.09.28"
+#define SCONF_VERSION "3.02.20.09.28"
 
 #define sconf_get_var_name(_var) #_var
 
@@ -116,7 +116,7 @@ static SHLink sconf_get_config_file_in_list(const char *_file_name){
     SHLinkCustomData data_result;
     if (shilink_search_data_by_position(
      sconf_list,
-     (void *) _file_name,
+     (const void *) _file_name,
      (uint16_t) (strlen(_file_name) % UINT16_MAX),
      0,
      &data_result
@@ -130,7 +130,7 @@ static int8_t sconf_add_file(const char *_file_name, const SHLink _conf_list){
     SHLinkCustomData data_add;
     if (shilink_fill_custom_data(
      &data_add,
-     (void *) _file_name,
+     (const void *) _file_name,
      (uint16_t) (strlen(_file_name) % UINT16_MAX),
      NULL,
      0,
@@ -264,18 +264,18 @@ int8_t sconf_copy_list(const char *_file_name, const char *_header_key, const ch
     SHLinkCustomData conf_data;
     shilink_fill_custom_data(
      &conf_data,
-     (void *) "SCONF_FILE_NAME",
+     (const void *) "SCONF_FILE_NAME",
      15,
-     (void *) _file_name,
+     (const void *) _file_name,
      (uint16_t) strlen(_file_name),
      SL_TEXT
     );
     shilink_append(&sconf_tmp, conf_data);
     if (_header_key != NULL && _header_value != NULL){
         shilink_fill_custom_data(&conf_data,
-         (void *) _header_key,
+         (const void *) _header_key,
          (uint16_t) strlen(_header_key),
-         (void *) _header_value,
+         (const void *) _header_value,
          (uint16_t) strlen(_header_value),
          SL_TEXT
         );
@@ -354,9 +354,9 @@ int8_t sconf_open_config(const char *_file_name){
     SHLinkCustomData conf_data;
     shilink_fill_custom_data(
      &conf_data,
-     (void *) "SCONF_FILE_NAME",
+     (const void *) "SCONF_FILE_NAME",
      15,
-     (void *) _file_name,
+     (const void *) _file_name,
      (uint16_t) strlen(_file_name),
      SL_TEXT
     );
@@ -375,9 +375,9 @@ int8_t sconf_open_config(const char *_file_name){
                 }
 		    	shilink_fill_custom_data(
                  &conf_data,
-                 (void *) buff_init,
+                 (const void *) buff_init,
                  (uint16_t) strlen(buff_init),
-                 (void *) buff_conf,
+                 (const void *) buff_conf,
                  (uint16_t) strlen(buff_conf),
                  SL_TEXT);
                 shilink_append(&sconf_tmp, conf_data);
@@ -426,9 +426,9 @@ int8_t sconf_open_config(const char *_file_name){
     if (additional_info_flag == 0x01 && strlen(buff_init) > 0){
         shilink_fill_custom_data(
          &conf_data,
-         (void *) "add_info",
+         (const void *) "add_info",
          8,
-         (void *) buff_init,
+         (const void *) buff_init,
          (uint16_t) strlen(buff_init),
          SL_TEXT
         );
@@ -500,7 +500,7 @@ int8_t sconf_close_config(const char *_file_name){
     shilink_free(&(sconf_tmp->sh_next));
     shilink_fill_custom_data(
      &data_deleted,
-     (void *) _file_name,
+     (const void *) _file_name,
      (uint16_t) (strlen(_file_name) % UINT16_MAX),
      NULL,
      0,
@@ -542,7 +542,7 @@ int8_t sconf_get_config_n(const char* _file_name, const char *_key, uint8_t _pos
     int8_t retval = 0;
     retval = shilink_search_data_by_position(
      sconf_tmp,
-     (void *) _key,
+     (const void *) _key,
      (uint16_t) strlen(_key),
      _pos,
      &data_return
@@ -577,7 +577,7 @@ char *sconf_get_config_as_string_n(const char* _file_name, const char *_key, uin
     int8_t retval = 0;
     retval = shilink_search_data_by_position(
      sconf_tmp,
-     (void *) _key,
+     (const void *) _key,
      (uint16_t) strlen(_key),
      _pos,
      &data_return
@@ -694,17 +694,17 @@ static int8_t sconf_update_config(
     
     shilink_fill_custom_data(
      &data_old,
-     (void *) _old_key,
+     (const void *) _old_key,
      (uint16_t) strlen(_old_key),
-     (void *) _old_value,
+     (const void *) _old_value,
      (uint16_t) strlen(_old_value),
      SL_TEXT
     );
     shilink_fill_custom_data(
      &data_new,
-     (void *) _new_key,
+     (const void *) _new_key,
      (uint16_t) strlen(_new_key),
-     (void *) _new_value,
+     (const void *) _new_value,
      (uint16_t) strlen(_new_value),
      SL_TEXT
     );
@@ -835,9 +835,9 @@ static int8_t sconf_remove_config(const char* _file_name, const char* _key, cons
     SHLinkCustomData data_rm;
     shilink_fill_custom_data(
      &data_rm,
-     (void *) _key,
+     (const void *) _key,
      (uint16_t) strlen(_key),
-     (void *) _value,
+     (const void *) _value,
      (uint16_t) strlen(_value),
      SL_TEXT
     );
@@ -873,7 +873,7 @@ int8_t sconf_remove_config_by_keyword(const char* _file_name, const char* _key, 
     SHLinkCustomData data_rm;
     shilink_fill_custom_data(
      &data_rm,
-     (void *) keyword,
+     (const void *) keyword,
      (uint16_t) strlen(keyword),
      NULL,
      0,
@@ -947,9 +947,9 @@ int8_t sconf_generate_new_config_start(const char *_file_name){
     SHLinkCustomData conf_data;
     if (shilink_fill_custom_data(
      &conf_data,
-     (void *) "SCONF_FILE_NAME",
+     (const void *) "SCONF_FILE_NAME",
      15,
-     (void *) _file_name,
+     (const void *) _file_name,
      (uint16_t) strlen(_file_name),
      SL_TEXT
     ) != 0){
@@ -964,7 +964,7 @@ int8_t sconf_generate_new_config_start(const char *_file_name){
 
     if (shilink_fill_custom_data(
      &conf_data,
-     (void *) "[END]",
+     (const void *) "[END]",
      5,
      NULL,
      0,
@@ -1054,9 +1054,9 @@ int8_t sconf_insert_config(const char *_file_name, sconf_rules _rules, const cha
 
     if (shilink_fill_custom_data(
      &conf_data,
-     (void *) _key,
+     (const void *) _key,
      (uint16_t) strlen(_key),
-     (void *) new_value,
+     (const void *) new_value,
      (uint16_t) strlen(new_value),
      SL_TEXT
     ) != 0){
@@ -1305,7 +1305,7 @@ int8_t sconf_release_config_list(const char *_file_name){
     shilink_free(&(sconf_tmp->sh_next));
     shilink_fill_custom_data(
      &data_deleted,
-     (void *) _file_name,
+     (const void *) _file_name,
      (uint16_t) (strlen(_file_name) % UINT16_MAX),
      NULL,
      0,
