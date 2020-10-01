@@ -1,6 +1,6 @@
 /*
     lib info    : SHIKI_LIB_GROUP - CONFIG TOOLS
-    ver         : 3.02.20.09.28
+    ver         : 3.03.20.10.01
     author      : Jaya Wikrama, S.T.
     e-mail      : jayawikrama89@gmail.com
     Copyright (c) 2020 HANA,. Jaya Wikrama
@@ -17,7 +17,7 @@
 
 #include "shiki-config-tools.h"
 
-#define SCONF_VERSION "3.02.20.09.28"
+#define SCONF_VERSION "3.03.20.10.01"
 
 #define sconf_get_var_name(_var) #_var
 
@@ -302,7 +302,7 @@ int8_t sconf_get_list(const char *_file_name, sconfList *_target){
         return -3;
     }
 
-    *_target = sconf_tmp;
+    *_target = sconf_tmp->sh_next;
     return 0;
 }
 
@@ -498,6 +498,10 @@ int8_t sconf_close_config(const char *_file_name){
     }
     SHLinkCustomData data_deleted;
     shilink_free(&(sconf_tmp->sh_next));
+    free(sconf_tmp->sl_data.sl_key);
+    free(sconf_tmp->sl_data.sl_value);
+    sconf_tmp->sl_data.sl_key = NULL;
+    sconf_tmp->sl_data.sl_value = NULL;
     shilink_fill_custom_data(
      &data_deleted,
      (const void *) _file_name,
@@ -1302,7 +1306,10 @@ int8_t sconf_release_config_list(const char *_file_name){
         return -3;
     }
     SHLinkCustomData data_deleted;
-    shilink_free(&(sconf_tmp->sh_next));
+    free(sconf_tmp->sl_data.sl_key);
+    free(sconf_tmp->sl_data.sl_value);
+    sconf_tmp->sl_data.sl_key = NULL;
+    sconf_tmp->sl_data.sl_value = NULL;
     shilink_fill_custom_data(
      &data_deleted,
      (const void *) _file_name,
@@ -1312,7 +1319,7 @@ int8_t sconf_release_config_list(const char *_file_name){
      SL_POINTER
     );
     if (shilink_delete(&sconf_list, data_deleted)){
-        sconf_debug(__func__, SCONF_DEBUG_WARNING, "configuration for (%s) has been free, but failed to release from list.\n", _file_name);
+        sconf_debug(__func__, SCONF_DEBUG_WARNING, "configuration for (%s) failed to release from list.\n", _file_name);
         return -4;
     }
     return 0;
