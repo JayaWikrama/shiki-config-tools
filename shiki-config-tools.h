@@ -1,6 +1,10 @@
 #ifndef __SHIKI_CONFIG_TOOLS__
 #define __SHIKI_CONFIG_TOOLS__
 
+#ifdef __cplusplus
+    extern "C" {
+#endif
+
 #include <stdint.h>
 #include "../shiki-linked-list/shiki-linked-list.h"
 
@@ -100,4 +104,9 @@ int8_t sconf_generate_new_config_end(const char *_file_name);
 int8_t sconf_force_write_config(const char *_file_name);
 int8_t sconf_write_config_updates(const char *_file_name);
 int8_t sconf_release_config_list(const char *_file_name);
+
+#ifdef __cplusplus
+    }
+#endif
+
 #endif

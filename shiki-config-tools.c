@@ -123,7 +123,7 @@ static SHLink sconf_get_config_file_in_list(const char *_file_name){
     )){
         return NULL;
     }
-    return data_result.sl_value;
+    return (SHLink) data_result.sl_value;
 }
 
 static int8_t sconf_add_file(const char *_file_name, const SHLink _conf_list){
@@ -560,7 +560,7 @@ int8_t sconf_get_config_n(const char* _file_name, const char *_key, uint8_t _pos
         strcpy(_return_value, "");
         return -4;
     }
-    strcpy(_return_value, data_return.sl_value);
+    strcpy(_return_value, (const char *) data_return.sl_value);
     return 0;
 }
 
@@ -756,7 +756,7 @@ int8_t sconf_update_config_value(
 	vsnprintf(new_value, (SCONF_MAX_BUFF - 1), _value, aptr);
 	va_end(aptr);
 
-    if (strlen(new_value) > (SCONF_MAX_BUFF - 1)){
+    if (strlen(new_value) > (size_t) (SCONF_MAX_BUFF - 1)){
         sconf_debug(__func__, SCONF_DEBUG_WARNING, "new_value memory overflow\n");
     }
 
@@ -792,7 +792,7 @@ int8_t sconf_update_config_keyword(
         return -4;
     }
 
-    if (strlen(curent_value) > (SCONF_MAX_BUFF - 1)){
+    if (strlen(curent_value) > (size_t) (SCONF_MAX_BUFF - 1)){
         sconf_debug(__func__, SCONF_DEBUG_WARNING, "new_key memory overflow\n");
     }
 
@@ -812,7 +812,7 @@ int8_t sconf_update_config_keyword(
 	vsnprintf(new_key, (SCONF_MAX_BUFF - 1), _new_key, aptr);
 	va_end(aptr);
 
-    if (strlen(new_key) > (SCONF_MAX_BUFF - 1)){
+    if (strlen(new_key) > (size_t) (SCONF_MAX_BUFF - 1)){
         sconf_debug(__func__, SCONF_DEBUG_WARNING, "new_key memory overflow\n");
     }
 
@@ -868,7 +868,7 @@ int8_t sconf_remove_config_by_keyword(const char* _file_name, const char* _key, 
 	vsnprintf(keyword, (SCONF_MAX_BUFF - 1), _key, aptr);
 	va_end(aptr);
 
-    if (strlen(keyword) > (SCONF_MAX_BUFF - 1)){
+    if (strlen(keyword) > (size_t) (SCONF_MAX_BUFF - 1)){
         sconf_debug(__func__, SCONF_DEBUG_WARNING, "keyword memory overflow\n");
     }
 
@@ -1036,7 +1036,7 @@ int8_t sconf_insert_config(const char *_file_name, sconf_rules _rules, const cha
 	vsnprintf(new_value, (SCONF_MAX_BUFF - 1), _value, aptr);
 	va_end(aptr);
 
-    if (strlen(new_value) > (SCONF_MAX_BUFF - 1)){
+    if (strlen(new_value) > (size_t) (SCONF_MAX_BUFF - 1)){
         sconf_debug(__func__, SCONF_DEBUG_WARNING, "new_value memory overflow\n");
     }
 
@@ -1112,7 +1112,7 @@ static int8_t sconf_write_config(
         return -3;
     }
 
-    if(strcmp(sconf_tmp->sl_data.sl_value, _file_name) != 0){
+    if(memcmp((const char *) (sconf_tmp->sl_data.sl_value), _file_name, strlen(_file_name)) != 0){
         sconf_debug(__func__, SCONF_DEBUG_WARNING, "current config is not \"%s\", but \"%s\"\n",
          _file_name, sconf_tmp->sl_data.sl_value
         );
@@ -1180,33 +1180,33 @@ static int8_t sconf_write_config(
         retval = shilink_get_data_by_position(sconf_tmp, idx_pos, &data_conf);
         if (retval == 0){
             if (end_state == 0){
-                if (strcmp(data_conf.sl_key, "add_info") == 0){
+                if (memcmp((const char *) (data_conf.sl_key), "add_info", 8) == 0){
                     fprintf(conf_file, "[END]\n%s", (char *) data_conf.sl_value);
                     sconf_append_data_checksum(checksum_data, (unsigned char *) "[END]\n", 6);
-                    sconf_append_data_checksum(checksum_data, (unsigned char *) data_conf.sl_value, strlen(data_conf.sl_value));
+                    sconf_append_data_checksum(checksum_data, (unsigned char *) data_conf.sl_value, strlen((const char *) data_conf.sl_value));
                     break;
                 }
-                else if (strcmp(data_conf.sl_key, "[END]") == 0){
+                else if (memcmp(data_conf.sl_key, "[END]", 5) == 0){
                     fprintf(conf_file, "%s\n", (char *) data_conf.sl_key);
                     sconf_append_data_checksum(checksum_data, (unsigned char *) "[END]\n", 6);
                     end_state = 1;
                 }
-                else if (strlen(data_conf.sl_value) == 0){
+                else if (strlen((const char *) (data_conf.sl_value)) == 0){
                     fprintf(conf_file, "%s\n", (char *) data_conf.sl_key);
-                    sconf_append_data_checksum(checksum_data, (unsigned char *) data_conf.sl_key, strlen(data_conf.sl_key));
+                    sconf_append_data_checksum(checksum_data, (unsigned char *) data_conf.sl_key, strlen((const char *) data_conf.sl_key));
                     sconf_append_data_checksum(checksum_data, (unsigned char *) "\n", 1);
                 }
-                else if (strlen(data_conf.sl_value) > 0){
+                else {
                     fprintf(conf_file, "%s%c%s\n", (char *) data_conf.sl_key, SCONF_SEPARATOR, (char *) data_conf.sl_value);
-                    sconf_append_data_checksum(checksum_data, (unsigned char *) data_conf.sl_key, strlen(data_conf.sl_key));
+                    sconf_append_data_checksum(checksum_data, (unsigned char *) data_conf.sl_key, strlen((const char *) data_conf.sl_key));
                     sconf_append_data_checksum(checksum_data, (unsigned char *) sconf_bytes, 1);
-                    sconf_append_data_checksum(checksum_data, (unsigned char *) data_conf.sl_value, strlen(data_conf.sl_value));
+                    sconf_append_data_checksum(checksum_data, (unsigned char *) data_conf.sl_value, strlen((const char *) data_conf.sl_value));
                     sconf_append_data_checksum(checksum_data, (unsigned char *) "\n", 1);
                 }
             }
-            else if (strcmp(data_conf.sl_key, "add_info") == 0){
+            else if (memcmp(data_conf.sl_key, "add_info", 8) == 0){
                 fprintf(conf_file, "%s", (char *) data_conf.sl_value);
-                sconf_append_data_checksum(checksum_data, (unsigned char *) data_conf.sl_value, strlen(data_conf.sl_value));
+                sconf_append_data_checksum(checksum_data, (unsigned char *) data_conf.sl_value, strlen((const char *) data_conf.sl_value));
                 break;
             }
         }
